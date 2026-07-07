@@ -100,7 +100,10 @@ class Recorder:
                 continue
             path = self.out_root / inst / channel / f"{stamp}.parquet"
             path.parent.mkdir(parents=True, exist_ok=True)
-            pd.DataFrame(rows).to_parquet(path, index=False)
+            try:
+                pd.DataFrame(rows).to_parquet(path, index=False, compression="zstd")
+            except (ImportError, ValueError):  # pyarrow built without zstd
+                pd.DataFrame(rows).to_parquet(path, index=False)
             written.append(path)
         self.buffers = {}
         self._last_rotate = time.time()

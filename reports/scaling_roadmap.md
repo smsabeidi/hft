@@ -42,6 +42,11 @@ funding in the current regime — see reports/hft_research_implementation.md
 (C2) before sizing this rung; it adds an FCM account to the M1 checklist.
 
 **M3 — The VM and the tick-data families (owner: founder $40/mo + harness).**
+2026-07-07 addendum: the recorder is LIVE on the laptop (cron, books5+trades,
+BTC/ETH perp+spot) and the C4/C5/C6 gates are pre-registered blind in
+reports/m3_preregistration.md — the M3 data clock started before M2, same
+de-serialization move as M1. The VM remains required for C6 and for real
+latency numbers; C5 can run on laptop data per the pre-registration.
 Cloud VM in the exchange region (1-5ms; laptop measured 121ms). The recorder
 (component 1) accumulates weeks of L2+trades data. Pre-registered families
 (basis/dislocation class) run through the same gauntlet. Each family that
