@@ -40,19 +40,25 @@ int OnInit()
                FIRM_NAME, FIRM_RULES_VERIFIED ? "true" : "FALSE (pin the rulebook!)",
                bal, g_risk.DailyLossFloor(), g_risk.TotalDDFloor());
 
-   g_csv = "shadow_" + (string)InpMagic + ".csv";
-   int fh = FileOpen(g_csv, FILE_WRITE | FILE_READ | FILE_CSV | FILE_COMMON);
-   if(fh == INVALID_HANDLE)
+   // tester agents sandbox the COMMON folder (observed 2026-07-07: FileOpen
+   // fails inside optimization agents) — the CSV proof only matters on a
+   // live chart, so skip it in the tester instead of failing init there.
+   if(!MQLInfoInteger(MQL_TESTER))
      {
-      Print("InfraShadow: COMMON file open failed — parity logging would be broken");
-      return(INIT_FAILED);
-     }
-   FileSeek(fh, 0, SEEK_END);
-   FileWrite(fh, TimeToString(TimeCurrent()), "init", AccountInfoDouble(ACCOUNT_EQUITY));
-   FileClose(fh);
+      g_csv = "shadow_" + (string)InpMagic + ".csv";
+      int fh = FileOpen(g_csv, FILE_WRITE | FILE_READ | FILE_CSV | FILE_COMMON);
+      if(fh == INVALID_HANDLE)
+        {
+         Print("InfraShadow: COMMON file open failed — parity logging would be broken");
+         return(INIT_FAILED);
+        }
+      FileSeek(fh, 0, SEEK_END);
+      FileWrite(fh, TimeToString(TimeCurrent()), "init", AccountInfoDouble(ACCOUNT_EQUITY));
+      FileClose(fh);
 
-   SendNotification("InfraShadow: deployment pipeline live on " +
-                    AccountInfoString(ACCOUNT_SERVER) + " (trades nothing).");
+      SendNotification("InfraShadow: deployment pipeline live on " +
+                       AccountInfoString(ACCOUNT_SERVER) + " (trades nothing).");
+     }
    EventSetTimer(60);
    return(INIT_SUCCEEDED);
   }
