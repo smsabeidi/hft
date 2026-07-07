@@ -6,8 +6,8 @@
 //| exercises the full deployment pipeline — risk engine, heartbeat,  |
 //| push notifications, common-file logging, connectivity tracking —  |
 //| so that the day a strategy passes the gauntlet, deployment is     |
-//| turnkey. There is NO OrderSend in this file, by construction:     |
-//| grep for it. It cannot trade regardless of settings.              |
+//| turnkey. No order-placement call of any kind exists in this file  |
+//| (grep it against the MQL5 trade API). It cannot trade, period.    |
 //|                                                                   |
 //| Runs fine with FIRM_RULES_VERIFIED=false because it never trades; |
 //| it LOGS the flag loudly so the missing rulebook pin stays visible.|
