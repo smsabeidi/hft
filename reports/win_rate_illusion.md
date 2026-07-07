@@ -62,6 +62,25 @@ drawdown — roughly -$25,700/lot over the year the founder's run made
 founder's own data window. Win rate and profitability are not the same
 axis; on this window they point in opposite directions.
 
+## Addendum 2026-07-07 (evening): the 80% win-rate goal, delivered with the invoice
+
+Founder goal: "get this bot to at least an 80% win rate." Delivered the
+same hour, because win rate is a geometry dial, not an achievement:
+TP=10/SL=50 (theoretical 83.3%) measures 82.9% across 5,907 signal-free
+trades on 5.5y of real EURUSD, and 84.6% on the founder's own tester
+window — at -1.30 pips/trade after friendly costs (t=-4.4), each stop
+erasing five wins. The MT5 embodiment is mql5/Experts/WinRate80.mq5,
+compiled into the founder's terminal: tester-only by construction (OnInit
+hard-fails outside the Strategy Tester), signal-free alternating entries,
+and an on-chart label stating the truth while it wins 4 of 5 trades.
+
+The 80%-winner with POSITIVE expectancy already exists in this house and
+is the only honest way to read the goal's spirit: the funding-capture book
+collects on ~86% of 8h intervals (crypto_opportunity.md) with validated
+positive expectancy, and it is live on paper right now. Per-trade win
+rates are purchased with geometry; portfolio-level win rates are earned
+with edge. This project pays only for the second kind.
+
 ## What each requested property actually costs
 
 A 100% win rate with a 1:3 or 1:5 stop:target is an arithmetic
