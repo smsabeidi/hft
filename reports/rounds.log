@@ -1,0 +1,2 @@
+2026-07-07T01:15:44.011114+00:00 family=session_breakout range=2021-01-03..2026-06-26 scheme=500/120 oos_exp=-31.88 t=-2.89 trades=606 stability=0.29 result=FAIL
+2026-07-07T01:33:35.181673+00:00 family=mean_reversion range=2021-01-03..2026-06-26 scheme=500/120 oos_exp=-21.77 t=-6.77 trades=1607 stability=0.00 result=FAIL

@@ -58,6 +58,27 @@ tests/           55 tests; the pre-commit hook runs them (fast, ~6s)
    (and, fittingly, an 80% win rate — the machine produces that number only
    when real structure exists).
 
+## Current research state (2026-07-06)
+
+Round 1 of the strategy gate ran on 5.5 years of REAL EURUSD M1
+(HistData, 1.99M bars, 2021-01..2026-06 — real prices, modeled spreads, so
+these rounds are PROVISIONAL and don't consume the 2-round kill budget;
+definitive rounds run on Dukascopy ticks):
+
+- falsification on the full real dataset: -$18.58/trade, t=-6.78 — decisive,
+  and the risk engine throttled the random gambler to zero lots at the floor
+  without a breach (sizing math verified on real prices).
+- `session_breakout` round 1: FAIL (-$31.88/trade, t=-2.89, 29% stability,
+  606 OOS trades).
+- `mean_reversion` round 1: FAIL (-$21.77/trade, t=-6.77, 0% stability,
+  1,607 OOS trades — while showing a 56% win rate; the win-rate lie, live).
+
+Conclusion so far: vanilla London breakout and vanilla z-score reversion do
+not survive retail costs on real data. Expected — these were candidate
+hypotheses, and the machine now rejects bad ones in minutes. Round-2 variants
+must be hypothesis-driven (regime filters, cost-aware entries), not
+grid-expanded, and should run on tick data.
+
 ## Quickstart
 
 ```bash

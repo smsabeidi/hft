@@ -44,19 +44,39 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--strategy", required=True, choices=sorted(FAMILIES))
     ap.add_argument("--pair", default="EURUSD")
-    ap.add_argument("--start", required=True)
-    ap.add_argument("--end", required=True)
+    ap.add_argument("--start")
+    ap.add_argument("--end")
+    ap.add_argument("--bars-glob", help="glob of bar parquets (e.g. data/bars/histdata/*.parquet)")
     ap.add_argument("--train-days", type=int, default=500)
     ap.add_argument("--test-days", type=int, default=120)
     args = ap.parse_args()
 
-    days = [d.strftime("%Y-%m-%d") for d in pd.date_range(args.start, args.end)]
-    ticks = read_ticks(DATA_ROOT, args.pair, days)
-    if ticks.empty:
-        print("no local tick data; run scripts/download_data.py first")
-        return 2
-    bars = ticks_to_bars(ticks, "1min")
-    print(f"{len(ticks):,} ticks -> {len(bars):,} M1 bars")
+    if args.bars_glob:
+        import glob as glob_mod
+
+        files = sorted(glob_mod.glob(args.bars_glob))
+        if not files:
+            print(f"no files match {args.bars_glob}")
+            return 2
+        bars = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+        bars = bars.sort_values("time", ignore_index=True)
+        print(f"{len(files)} files -> {len(bars):,} M1 bars "
+              f"({bars['time'].iloc[0].date()} .. {bars['time'].iloc[-1].date()})")
+        if "spread" not in bars.columns:
+            print("note: no spread column — engine uses the cost model's default "
+                  "spread; results provisional until re-run on Dukascopy ticks.")
+        data_range = f"{bars['time'].iloc[0].date()}..{bars['time'].iloc[-1].date()}"
+    else:
+        if not (args.start and args.end):
+            ap.error("provide --bars-glob or --start/--end")
+        days = [d.strftime("%Y-%m-%d") for d in pd.date_range(args.start, args.end)]
+        ticks = read_ticks(DATA_ROOT, args.pair, days)
+        if ticks.empty:
+            print("no local tick data; run scripts/download_data.py first")
+            return 2
+        bars = ticks_to_bars(ticks, "1min")
+        print(f"{len(ticks):,} ticks -> {len(bars):,} M1 bars")
+        data_range = f"{args.start}..{args.end}"
 
     cls, grid = FAMILIES[args.strategy]
     cfg = FirmConfig(
@@ -88,8 +108,9 @@ def main() -> int:
     with ROUNDS_LOG.open("a") as f:
         f.write(
             f"{datetime.now(timezone.utc).isoformat()} family={args.strategy} "
-            f"range={args.start}..{args.end} scheme={args.train_days}/{args.test_days} "
-            f"oos_exp={res.oos_metrics.expectancy_usd:.2f} trades={res.oos_metrics.n_trades} "
+            f"range={data_range} scheme={args.train_days}/{args.test_days} "
+            f"oos_exp={res.oos_metrics.expectancy_usd:.2f} t={res.oos_metrics.t_stat:.2f} "
+            f"trades={res.oos_metrics.n_trades} "
             f"stability={res.stability:.2f} result={'PASS' if res.passed() else 'FAIL'}\n"
         )
     print(f"\nround logged to {ROUNDS_LOG}")
