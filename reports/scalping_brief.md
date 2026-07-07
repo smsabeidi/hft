@@ -74,6 +74,18 @@ frequency ceiling from the table is single-digit trades/day at multi-hour
 holds — which is what the M4 revival was already scoped to be, now with
 the quantitative reason attached.
 
+## Addendum 2026-07-07: the limit-entry lever, priced
+
+Question raised: does entering on pending/limit orders (saving the entry
+half-spread) open a higher-frequency MT5 lane? Measured answer (preset added
+to edge_budget.py): no. On a raw-spread account the $7/lot round-trip
+commission (~0.65bp) is the binding floor, not the spread; at that best case
+a 1-minute hold still needs IC 0.49 (impossible with retail information),
+15 minutes needs 0.13 (top-HFT-with-depth territory), and the viability
+frontier stays at multi-hour holds. Retail MT5 has no maker rebate tier, and
+a filled retail limit on a dealer platform is adversely selected. The
+commission floor is why no execution trick reopens the sub-hour band.
+
 ## Bottom line
 
 The frequency dial is set by cost/sigma(h), and at retail information and

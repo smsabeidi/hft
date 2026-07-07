@@ -81,6 +81,11 @@ def main() -> int:
     venues = [
         ("MT5 EURUSD raw+comm (prop tier)", 0.9, 0.08, FX_MIN_PER_YEAR),
         ("MT5 EURUSD w/ slippage+news", 1.6, 0.08, FX_MIN_PER_YEAR),
+        # limit-entry lever: entering on a pending order saves the entry
+        # half-spread (~0.1 pip on raw) but the $7/lot RT commission floor
+        # (~0.65bp) remains, and a filled retail limit on a dealer platform
+        # is adversely selected. There is no maker REBATE tier retail-side.
+        ("MT5 EURUSD limit-entry floor", 0.65, 0.08, FX_MIN_PER_YEAR),
         ("OKX BTC perp TAKER (2x5bp+spread)", 10.0 + btc_spread, 0.45, CRYPTO_MIN_PER_YEAR),
         ("OKX BTC perp MAKER floor (~2bp)", 2.0, 0.45, CRYPTO_MIN_PER_YEAR),
     ]

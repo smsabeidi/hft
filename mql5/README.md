@@ -10,17 +10,26 @@ strategy has passed the Python harness gauntlet.
 - `Include/RiskEngine.mqh` — prop-firm risk engine. Mirrors
   `hft/risk/engine.py` method-for-method. Change the Python reference first,
   then this file, then re-run the parity gate.
-- `Experts/SessionBreakout.mq5` — London-open breakout EA (candidate family,
-  not a validated edge). Server-side SL/TP on every order, disconnect policy,
+- `Experts/SessionBreakout.mq5` — London-open breakout EA (family REFUTED in
+  round 1 — kept as the reference implementation of the live-ops pattern;
+  never deploy it). Server-side SL/TP on every order, disconnect policy,
   restart re-sync, heartbeat, push notifications, parity CSV logging.
+- `Include/FirmConfig.mqh` — GENERATED from `config/ftmo_50k.json` by
+  `scripts/gen_firm_config.py`; never hand-edit. The JSON is the single
+  source of truth for firm limits; EAs written after 2026-07-07 include this
+  and refuse demo/live while `FIRM_RULES_VERIFIED` is false.
 
 ## Deploy checklist (Windows VPS)
 
 1. Install MT5 from the chosen broker. Log into the DEMO account.
 2. Copy `Include/RiskEngine.mqh` to `MQL5/Include/`, the EA to `MQL5/Experts/`.
 3. Compile in MetaEditor (F7). Zero warnings is the bar.
-4. Pin the firm rulebook numbers into the EA inputs and set
-   `InpRulesVerified=true` — the EA refuses to run live/demo without it.
+4. Pin the firm rulebook into `config/ftmo_50k.json` (flip `verified` to
+   true only with a dated rulebook version in hand), run
+   `python3 scripts/gen_firm_config.py`, and copy the regenerated
+   `Include/FirmConfig.mqh` alongside the other includes. Never type risk
+   numbers into EA inputs by hand — transcription typos in drawdown
+   constants are an account-killing failure mode.
 5. Enable push notifications (Tools → Options → Notifications) with your
    MetaQuotes ID so halts and fills reach your phone.
 6. Windows Task Scheduler: auto-start MT5 on boot; enable auto-login.
