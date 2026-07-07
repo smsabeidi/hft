@@ -86,6 +86,19 @@ Conclusion: both textbook families are refuted on real data, robustly to cost
 assumptions. This is the harness working — one evening of compute replaced
 months of demo losses and at least one burned challenge fee.
 
+Family #3, TSMOM (a-priori from the literature, pooled EURUSD+GBPUSD+AUDUSD
+to reach sample size): FAIL — pooled -$40.04/trade (t=-4.48, 302 OOS trades,
+14% stability), negative on every pair. Daily FX trend-following did not pay
+on these majors 2021-2026 at this horizon.
+
+**REASSESSMENT CLAUSE TRIGGERED (design doc, failure policy):** three
+families have failed in a row. Per the doc's own rule, the next step is NOT a
+fourth ad-hoc family — it is a track-level decision: (a) pivot to the
+deferred crypto track (Approach A, where 1-5ms infrastructure is reachable
+and microstructure families live), (b) build a new a-priori forex hypothesis
+set and run it on Dukascopy tick data, or (c) stop. That decision belongs to
+the founder; take it through /office-hours or /plan-ceo-review.
+
 Registered hypotheses for FUTURE tick-data rounds (pre-registered here so
 nobody pretends they weren't born from peeking at the above):
 1. Breakout-FADE: the zero-cost negative expectancy of breakout suggests the
