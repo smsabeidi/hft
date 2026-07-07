@@ -20,6 +20,14 @@ strategy has passed the Python harness gauntlet.
   logging, and connectivity handling end-to-end, so a validated strategy
   later drops into a verified pipeline. This is the sanctioned "launch
   today" while no strategy has passed the gauntlet.
+- `Experts/SignalHost.mq5` — the strategy-agnostic HOST: full live-ops
+  discipline (FirmConfig-generated limits, risk engine with permanent
+  halts, server-side SL/TP, restart/disconnect policy, parity CSV, push
+  alerts) around a pluggable signal slot that SHIPS NULL. The first family
+  to pass the gauntlet + parity gate is implemented in GetSignal() and
+  nothing else — deployment goes from days to hours. Wiring an unvalidated
+  signal into the slot is prohibited by the same rule that makes this
+  repo's numbers trustworthy.
 - `Include/FirmConfig.mqh` — GENERATED from `config/ftmo_50k.json` by
   `scripts/gen_firm_config.py`; never hand-edit. The JSON is the single
   source of truth for firm limits; EAs written after 2026-07-07 include this
