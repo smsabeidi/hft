@@ -41,6 +41,16 @@ round on it -> if PASS and M0 closes, first $1-5k there; if FAIL, the edge is
 offshore-only and the US path needs a different family (or entity-level
 choices that are a lawyer conversation, not a bot conversation).
 
+**M1.5 UPDATE (2026-07-07, run same day as this brief):** the provisional
+transfer test already ran on Kraken's public funding history
+(scripts/run_m15_kraken.py, gate pre-registered): 14 pooled episodes over
+~1y at frozen round-1 params, mean net +19.6 bps/episode — PASS-provisional
+(above the 18.6 bps sanity floor) but well under round 1's +74.2, and the
+2026 episodes skew to short whipsaw losers, consistent with the documented
+funding-decay trend. Read: the Branch-A path is open but the carry is thin
+in the current regime; sizing expectations should follow the 1y-era number
+(~1-2%/yr net), not the 5.5y average, until evidence says otherwise.
+
 ## Branch B — non-US person
 
 The paper venue is the real venue: OKX (or Bybit; both fee-competitive).
