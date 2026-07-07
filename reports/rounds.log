@@ -1,2 +1,5 @@
 2026-07-07T01:15:44.011114+00:00 family=session_breakout range=2021-01-03..2026-06-26 scheme=500/120 oos_exp=-31.88 t=-2.89 trades=606 stability=0.29 result=FAIL
 2026-07-07T01:33:35.181673+00:00 family=mean_reversion range=2021-01-03..2026-06-26 scheme=500/120 oos_exp=-21.77 t=-6.77 trades=1607 stability=0.00 result=FAIL
+2026-07-07T01:44:59.230731+00:00 family=session_breakout range=2021-01-03..2026-06-26 scheme=500/120 costs=0.25sp/0.1sl oos_exp=-23.64 t=-2.11 trades=628 stability=0.43 result=FAIL
+2026-07-07T02:03:18.791235+00:00 family=mean_reversion range=2021-01-03..2026-06-26 scheme=500/120 costs=0.25sp/0.1sl oos_exp=-11.40 t=-3.69 trades=2655 stability=0.00 result=FAIL
+2026-07-07T02:05:50.790729+00:00 family=session_breakout range=2021-01-03..2026-06-26 scheme=500/120 costs=0.0001sp/0.0sl oos_exp=-25.83 t=-2.20 trades=588 stability=0.29 result=FAIL

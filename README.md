@@ -73,11 +73,28 @@ definitive rounds run on Dukascopy ticks):
 - `mean_reversion` round 1: FAIL (-$21.77/trade, t=-6.77, 0% stability,
   1,607 OOS trades — while showing a 56% win rate; the win-rate lie, live).
 
-Conclusion so far: vanilla London breakout and vanilla z-score reversion do
-not survive retail costs on real data. Expected — these were candidate
-hypotheses, and the machine now rejects bad ones in minutes. Round-2 variants
-must be hypothesis-driven (regime filters, cost-aware entries), not
-grid-expanded, and should run on tick data.
+Cost-sensitivity follow-up (same data, bracketing the unknown spread):
+- `session_breakout` at ZERO cost: still -$25.83/trade (t=-2.20). The signal
+  itself is negative — London breakouts of the Asian range ANTI-predicted
+  direction on EURUSD 2021-2026. Not a cost problem; the hypothesis is false.
+  Family dead beyond appeal.
+- `mean_reversion` at optimistic raw-spread costs (0.25 pips + 0.1 slip):
+  -$11.40/trade (t=-3.69). Half the loss was spread; the residual signal is
+  still negative. Family dead at any realistic cost.
+
+Conclusion: both textbook families are refuted on real data, robustly to cost
+assumptions. This is the harness working — one evening of compute replaced
+months of demo losses and at least one burned challenge fee.
+
+Registered hypotheses for FUTURE tick-data rounds (pre-registered here so
+nobody pretends they weren't born from peeking at the above):
+1. Breakout-FADE: the zero-cost negative expectancy of breakout suggests the
+   opposite trade may carry signal. Suspicious by construction (it's the
+   mirror of an in-sample observation) — needs out-of-sample tick data and a
+   causal story before it earns a round.
+2. Regime-conditional variants: both families unconditioned on volatility or
+   trend regime; condition entries and re-test as NEW families (round budget
+   resets only with a materially different hypothesis).
 
 ## Quickstart
 

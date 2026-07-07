@@ -49,6 +49,9 @@ def main() -> int:
     ap.add_argument("--bars-glob", help="glob of bar parquets (e.g. data/bars/histdata/*.parquet)")
     ap.add_argument("--train-days", type=int, default=500)
     ap.add_argument("--test-days", type=int, default=120)
+    ap.add_argument("--spread-pips", type=float, default=0.7,
+                    help="default spread when bars carry none (cost sensitivity)")
+    ap.add_argument("--slippage-pips", type=float, default=0.2)
     args = ap.parse_args()
 
     if args.bars_glob:
@@ -82,7 +85,7 @@ def main() -> int:
     cfg = FirmConfig(
         daily_loss_frac=0.05, total_drawdown_frac=0.10, max_lots=5.0, risk_per_trade_frac=0.005
     )
-    cm = CostModel()
+    cm = CostModel(default_spread_pips=args.spread_pips, slippage_pips=args.slippage_pips)
 
     res = walk_forward(
         bars,
@@ -109,6 +112,7 @@ def main() -> int:
         f.write(
             f"{datetime.now(timezone.utc).isoformat()} family={args.strategy} "
             f"range={data_range} scheme={args.train_days}/{args.test_days} "
+            f"costs={args.spread_pips}sp/{args.slippage_pips}sl "
             f"oos_exp={res.oos_metrics.expectancy_usd:.2f} t={res.oos_metrics.t_stat:.2f} "
             f"trades={res.oos_metrics.n_trades} "
             f"stability={res.stability:.2f} result={'PASS' if res.passed() else 'FAIL'}\n"
