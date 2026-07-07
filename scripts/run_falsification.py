@@ -59,9 +59,13 @@ def main() -> int:
     ap.add_argument("--pair", default="EURUSD")
     ap.add_argument("--start")
     ap.add_argument("--end")
+    ap.add_argument("--bars", help="parquet of pre-built bars (e.g. from fetch_yahoo_bars.py)")
     args = ap.parse_args()
 
-    if args.start and args.end:
+    if args.bars:
+        bars = pd.read_parquet(args.bars)
+        source = f"bars file {args.bars} ({len(bars):,} bars)"
+    elif args.start and args.end:
         days = [d.strftime("%Y-%m-%d") for d in pd.date_range(args.start, args.end)]
         ticks = read_ticks(DATA_ROOT, args.pair, days)
         if ticks.empty:
@@ -74,8 +78,12 @@ def main() -> int:
         source = "synthetic random walk (20 trading days of M1)"
 
     cm = CostModel()
+    # falsification measures PER-TRADE economics, not account survival: size
+    # tiny (0.1% risk) so the account survives long enough to collect a
+    # decisive sample. At normal sizing the risk engine (correctly) executes
+    # the random gambler within days, leaving a CI too wide to conclude from.
     cfg = FirmConfig(
-        daily_loss_frac=0.05, total_drawdown_frac=0.10, max_lots=5.0, risk_per_trade_frac=0.005
+        daily_loss_frac=0.05, total_drawdown_frac=0.10, max_lots=5.0, risk_per_trade_frac=0.001
     )
     bt = Backtester(cm, RiskEngine(cfg, 50_000.0, cm.pip_value_per_lot), 50_000.0)
     res = bt.run(bars, RandomFlipper(every_bars=15, sl_pips=6.0, tp_pips=6.0, seed=7))

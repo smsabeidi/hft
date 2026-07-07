@@ -43,15 +43,34 @@ tests/           55 tests; the pre-commit hook runs them (fast, ~6s)
    ($25k-$50k tier). Max 2 paid attempts, ever, without a materially new
    strategy passing every prior gate.
 
+## Harness validation — three layers, all passing
+
+1. **Falsification** (`scripts/run_falsification.py`) — a zero-edge strategy
+   must LOSE after costs. Passes on synthetic data (-$11.52/trade, t=-5.2)
+   AND on real EURUSD 1m data (-$12.23/trade, t=-2.3) — both ≈ the round-trip
+   cost, exactly as theory predicts. Cost realism verified against a real market.
+2. **False-positive control** (`scripts/run_synthetic_check.py`) — real
+   strategy families must FAIL walk-forward on random walks. This layer caught
+   a live gate weakness (51 lucky trades at t=0.7 passed before the
+   min-trades/t-stat requirements existed).
+3. **Statistical power** (`scripts/run_power_check.py`) — a planted edge must
+   be DETECTED. The gauntlet finds it at t=16.7 with 100% window stability
+   (and, fittingly, an 80% win rate — the machine produces that number only
+   when real structure exists).
+
 ## Quickstart
 
 ```bash
 python3 -m pip install numpy pandas pyarrow scipy pytest
-python3 -m pytest                          # 55 tests, ~6s
-python3 scripts/run_falsification.py       # the truth-machine self-test
-python3 scripts/download_data.py --pair EURUSD --days 60
+python3 -m pytest                          # 65 tests, ~3s
+python3 scripts/run_falsification.py       # truth-machine self-test 1
+python3 scripts/run_synthetic_check.py     # self-test 2: no edge in noise
+python3 scripts/run_power_check.py         # self-test 3: planted edge found
+python3 scripts/fetch_yahoo_bars.py        # 5-7 days of REAL 1m bars (smoke tests)
+python3 scripts/download_data.py --pair EURUSD --days 60   # research-grade ticks
 python3 scripts/run_walkforward.py --strategy session_breakout \
     --pair EURUSD --start 2026-05-01 --end 2026-06-30 --train-days 20 --test-days 5
+python3 scripts/challenge_ev.py --expectancy 8 --std 120   # price a paid attempt
 ```
 
 ## Before ANY demo deployment
