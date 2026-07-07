@@ -25,6 +25,20 @@ strategy has passed the Python harness gauntlet.
   source of truth for firm limits; EAs written after 2026-07-07 include this
   and refuse demo/live while `FIRM_RULES_VERIFIED` is false.
 
+## Phone cockpit (MT5 mobile)
+
+The mobile app runs NO EAs — platform limit, every account, everyone. The
+engine runs in a terminal/VPS; the phone is the cockpit: live positions,
+push alerts, manual close (the human kill switch). Setup: install the MT5
+app -> log in with the same account+server -> app Settings -> Messages ->
+copy the MQID -> desktop Tools -> Options -> Notifications -> enable push,
+paste MQID, Test. Every EA here already calls SendNotification for the
+events that matter (pipeline-up, disconnects, breach halts, fills). For
+24/7 uptime while the Mac sleeps: the plan-of-record Windows VPS, or MT5's
+built-in Virtual Hosting (right-click chart -> Add to Virtual Server) as a
+demo-grade convenience. Identical setup for demo, live, and FTMO accounts —
+build the habit on demo; live is gated by the runbook.
+
 ## Deploy checklist (Windows VPS)
 
 1. Install MT5 from the chosen broker. Log into the DEMO account.
