@@ -1,0 +1,15 @@
+# data is an artifact, never committed
+data/
+*.parquet
+*.bi5
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# reports and scratch
+reports/out/
+.DS_Store

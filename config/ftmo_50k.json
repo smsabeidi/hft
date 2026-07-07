@@ -1,0 +1,25 @@
+{
+  "_comment": "PLACEHOLDER — every number below is UNVERIFIED until the founder pins the current FTMO rulebook (The Assignment in the design doc). The risk engine refuses to run live/demo with verified=false. Rules differ per firm and change over time; pin a dated version.",
+  "verified": false,
+  "firm": "FTMO",
+  "account_tier_usd": 50000,
+  "account_type": "TBD: Normal vs Swing (weekend holding + news rules differ)",
+  "daily_loss_frac": 0.05,
+  "total_drawdown_frac": 0.10,
+  "drawdown_mode": "static_initial_balance",
+  "daily_anchor": "max_of_balance_equity_at_rollover",
+  "rollover_timezone": "TBD: FTMO uses CE(S)T midnight — confirm",
+  "profit_target_frac_phase1": 0.10,
+  "profit_target_frac_phase2": 0.05,
+  "min_trading_days": 4,
+  "max_lots": 5.0,
+  "news_trading_restricted": "TBD",
+  "weekend_holding_allowed": "TBD",
+  "ea_allowed": "TBD: confirm EA policy",
+  "consistency_rule": "TBD",
+  "own_policy": {
+    "risk_per_trade_frac": 0.005,
+    "daily_headroom_safety_factor": 2.0,
+    "max_concurrent_positions": 1
+  }
+}

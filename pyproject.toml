@@ -1,0 +1,19 @@
+[project]
+name = "hft"
+version = "0.1.0"
+description = "Research harness for the MT5 prop-firm algorithmic trading system (see ~/.gstack/projects/HFT design doc)"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pyarrow>=14",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
