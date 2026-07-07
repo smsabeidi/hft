@@ -39,6 +39,18 @@ that restarts a self-terminating run whenever none is alive, bounding
 post-wake recovery at 15 minutes. Coverage accounting in the C5 data floor
 is unchanged and will reflect whatever gaps sleep still causes.
 
+AMENDMENT 2026-07-07 (blind machinery build, no gate touched): the C5
+implementation now exists in code — hft/crypto/basis_meanrev.py (spec as
+frozen above; implementation constants fixed blind and documented in the
+module docstring: 500ms match tolerance, 5s decision cadence, min_periods =
+half window), scripts/run_c5_round.py (ENFORCES the data floor in code:
+refuses to run until it is met), hft/crypto/coverage.py +
+scripts/coverage_report.py (floor accounting). Tests are synthetic-data
+only, including a falsification-style check (random-walk basis must lose
+after costs). At build time the floor stood at 0/30 qualifying days; no
+recorded market data was read by any analysis. Tuning any implementation
+constant against recorded data after this date voids the round.
+
 ## Common cost model (all families)
 
 Taker legs at 25bp round trip for the 4-leg perp+spot pair (identical to the
