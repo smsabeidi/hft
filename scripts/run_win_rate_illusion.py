@@ -36,6 +36,9 @@ COST_RT_PIPS = 0.25 + 0.7 + 0.1
 
 SPECS = [
     BracketSpec("grail_2_100", 2, 100),
+    BracketSpec("wr95_5_95", 5, 95),     # the "get us N%" menu: dial + price
+    BracketSpec("wr90_10_90", 10, 90),
+    BracketSpec("wr85_10_60", 10, 60),
     BracketSpec("rr_1to5", 10, 50),
     BracketSpec("rr_1to3", 10, 30),
     BracketSpec("symmetric", 20, 20),

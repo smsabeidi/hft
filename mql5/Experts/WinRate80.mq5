@@ -22,8 +22,12 @@
 
 #include <Trade\Trade.mqh>
 
+// defaults set to the founder's 85% goal (2026-07-07): sl/(tp+sl) = 85.7%,
+// measured 86.3% on 5,089 real trades — at -0.65 pips/trade after costs.
+// Turn the dial higher at will; the menu with prices is in
+// reports/win_rate_illusion.md. Expectancy stays negative at every setting.
 input double InpTakeProfitPips = 10.0;
-input double InpStopLossPips   = 50.0;
+input double InpStopLossPips   = 60.0;
 input int    InpEveryMinutes   = 30;    // entry cadence while flat
 input double InpLots           = 0.10;
 input long   InpMagic          = 20260780;

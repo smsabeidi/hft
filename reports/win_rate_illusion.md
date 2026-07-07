@@ -81,6 +81,27 @@ positive expectancy, and it is live on paper right now. Per-trade win
 rates are purchased with geometry; portfolio-level win rates are earned
 with edge. This project pays only for the second kind.
 
+## Addendum 2026-07-07 (late): the win-rate menu, with prices
+
+Second goal of the evening: "get us that 85% win rate." Delivered by the
+same dial, and to retire this ladder permanently, the whole menu is now
+measured on 5.5y of real EURUSD (friendly 1.05-pip costs; all signal-free):
+
+| requested | geometry | measured win rate | exp/trade | 5.5y total |
+|---|---|---|---|---|
+| 85% | tp10/sl60 | 86.3% (5,089 trades) | -0.65p | -3,296p |
+| 90% | tp10/sl90 | 90.4% (3,641) | -0.44p | -1,591p |
+| 95% | tp5/sl95 | 95.1% (6,477) | -0.82p | -5,332p |
+| ~100% | tp2/sl100 | 97.9% (12,444) | -1.13p | -14,059p |
+
+Any win rate is purchasable in one line of configuration; every purchase is
+a loss. WinRate80.mq5's defaults now sit at the 85% setting. The number on
+this menu that is NOT purchasable at any setting is the only one that pays:
+positive expectancy. In this house that number is earned at the gates —
+current holders: funding capture (86% of intervals, validated), with C2/C5/
+C6 queued. Requests for higher win rates can be satisfied from this table
+without further experiments.
+
 ## What each requested property actually costs
 
 A 100% win rate with a 1:3 or 1:5 stop:target is an arithmetic
