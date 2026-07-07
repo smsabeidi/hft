@@ -88,6 +88,11 @@ int OnInit()
      }
 
    g_pip = (_Digits == 5 || _Digits == 3) ? 10.0 * _Point : _Point;
+   if(_Symbol != "EURUSD")
+      PrintFormat("SessionBreakout WARNING: params are EURUSD-frozen pips. On %s "
+                  "the range filter (max %.0f pips = %.2f in price) will reject "
+                  "most or all days — zero trades is the EXPECTED outcome, not a bug.",
+                  _Symbol, InpMaxRangePips, InpMaxRangePips * g_pip);
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetDeviationInPoints(20);
 
