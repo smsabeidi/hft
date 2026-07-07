@@ -27,7 +27,7 @@
 //| - parity CSV trade log in the COMMON files folder                |
 //+------------------------------------------------------------------+
 #property copyright "HFT harness"
-#property version   "0.20"
+#property version   "1.20"
 #property strict
 
 #include <Trade\Trade.mqh>
