@@ -36,6 +36,10 @@ pnl (at 4%/yr on $5k this earns ~$200/yr): it is slippage-vs-model, funding
 accrual accuracy, and zero operational surprises over 10+ real episodes.
 This rung buys verified live-ops, the one asset paper cannot produce.
 Kill: any unexplained accounting divergence > 10 bps/episode.
+2026-07-07 addendum: on Branch A, the fixed-expiry wrapper (CME micro
+futures vs onshore spot) now has study evidence favoring it over floating
+funding in the current regime — see reports/hft_research_implementation.md
+(C2) before sizing this rung; it adds an FCM account to the M1 checklist.
 
 **M3 — The VM and the tick-data families (owner: founder $40/mo + harness).**
 Cloud VM in the exchange region (1-5ms; laptop measured 121ms). The recorder

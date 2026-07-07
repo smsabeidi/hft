@@ -1,0 +1,1 @@
+2026-07-07T04:29Z ETH-USDT-SWAP: 0 episodes, mean net n/a bps, equity -7.53 bps | OPEN 0.2h, gross so far +0.0bps ------------------------------------------------------------ pooled: 0 completed episodes (need 10). Funding pays every 8h; episodes close when the smoothed rate crosses the exit threshold — this takes days, by design. 
