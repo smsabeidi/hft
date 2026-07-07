@@ -1,5 +1,5 @@
-# data is an artifact, never committed
-data/
+# data is an artifact, never committed (root-anchored: hft/data is CODE)
+/data/
 *.parquet
 *.bi5
 
