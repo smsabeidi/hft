@@ -14,6 +14,12 @@ strategy has passed the Python harness gauntlet.
   round 1 — kept as the reference implementation of the live-ops pattern;
   never deploy it). Server-side SL/TP on every order, disconnect policy,
   restart re-sync, heartbeat, push notifications, parity CSV logging.
+- `Experts/InfraShadow.mq5` — infrastructure bring-up EA that TRADES
+  NOTHING (no OrderSend in the file — grep it). Deploy THIS first, on demo:
+  it proves risk telemetry, heartbeat, push notifications, common-file
+  logging, and connectivity handling end-to-end, so a validated strategy
+  later drops into a verified pipeline. This is the sanctioned "launch
+  today" while no strategy has passed the gauntlet.
 - `Include/FirmConfig.mqh` — GENERATED from `config/ftmo_50k.json` by
   `scripts/gen_firm_config.py`; never hand-edit. The JSON is the single
   source of truth for firm limits; EAs written after 2026-07-07 include this

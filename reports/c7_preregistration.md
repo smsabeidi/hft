@@ -15,6 +15,15 @@ daily-horizon, so it does not need ticks — but running it is the FOUNDER's
 call because it reopens the parked forex fork. This document makes that a
 one-word decision. Pre-registration is binding once the round runs.
 
+ROUND 1 RESULT (2026-07-07, founder green-lit the fork reopening same day):
+FAIL — 25 pooled OOS episodes, mean -31bp, t=-0.59, stability 19% at the
+m=1.0% gate; fails even at m=0.5%. The walk-forward's own train choices
+went increasingly flat in 2024-2025 windows as differentials narrowed.
+One round remains under the standing kill rule. Any round-2 spec must be a
+dated amendment here, materially different and still a-priori (candidate
+directions: cross-sectional carry basket long-highest/short-lowest across
+a wider pair set; forward-points-based signal instead of 3m proxies).
+
 ## Frozen spec
 
 Universe: EURUSD, GBPUSD, AUDUSD daily bars (aggregated from the histdata
