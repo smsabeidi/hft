@@ -99,6 +99,12 @@ and microstructure families live), (b) build a new a-priori forex hypothesis
 set and run it on Dukascopy tick data, or (c) stop. That decision belongs to
 the founder; take it through /office-hours or /plan-ceo-review.
 
+Decision support for branch (a): `reports/crypto_opportunity.md` quantifies
+the funding-capture opportunity from 5.5 years of public funding history —
+~11%/yr gross delta-neutral carry on BTC/ETH, real but decaying (30%+ in
+2021, ~1% in 2026 H1). The first positive expected-return number in the
+project, honestly caveated.
+
 Registered hypotheses for FUTURE tick-data rounds (pre-registered here so
 nobody pretends they weren't born from peeking at the above):
 1. Breakout-FADE: the zero-cost negative expectancy of breakout suggests the
