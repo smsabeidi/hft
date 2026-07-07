@@ -12,3 +12,4 @@
 2026-07-07T05:50:38.444429+00:00 family=funding_timing_micro range=2023-07..2026-06 scheme=event-study costs=25bpRT gate_events=0 best_delta=5m best_mean_net_bps=0.0 t=0.00 result=FAIL
 2026-07-07T14:42:41.343484+00:00 family=fx_carry_vol_filtered range=2021-01..2026-06 scheme=500/120x1d costs=1.8pipRT+swap_markup1.0 mean_ep_net_bps=-30.7 t=-0.59 episodes=25 stability=0.19 result=FAIL
 2026-07-07T16:41:55.018053+00:00 family=fvg_retest_1to3 range=2021-01..2026-06 scheme=500/120xM5 costs=1.05pipRT mean_trade_net_pips=0.09 t=2.70 trades=23714 win_rate=0.42 stability=0.39 result=FAIL
+2026-07-07T17:26:10.211281+00:00 family=fvg_retest_r2_gold_btc range=2021-01..2026-06 scheme=500/120xM5 costs=XAU2bp/BTC10bpRT mean_trade_net_bps=-3.09 t=-33.21 trades=29500 win_rate=0.40 stability=0.25 result=FAIL-family-dead
