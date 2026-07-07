@@ -27,7 +27,7 @@ Honest deviations from the forex gate, documented:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import product
 
 import numpy as np
@@ -73,9 +73,16 @@ def backtest_capture(funding: pd.DataFrame, p: CaptureParams) -> CaptureResult:
     interval i itself."""
     rates = funding["rate"].to_numpy(dtype=float)
     times = funding["time"].reset_index(drop=True)
-    n = len(rates)
     smooth = pd.Series(rates).rolling(p.smooth_n).mean().shift(1).to_numpy()
+    return _run_episodes(rates, times, smooth, p)
 
+
+def _run_episodes(
+    rates: np.ndarray, times: pd.Series, smooth: np.ndarray, p: CaptureParams
+) -> CaptureResult:
+    """The hysteresis state machine, driven by any causal signal array
+    (`smooth[i]` must be computable from intervals < i only)."""
+    n = len(rates)
     enter, exit_ = p.enter_bps / 1e4, p.exit_bps / 1e4
     fee_half = (p.fee_rt_bps / 1e4) / 2 * p.utilization
 
@@ -192,6 +199,71 @@ def walk_forward_capture(
             FundingWindow(
                 test_start=test["time"].iloc[0],
                 params=best,
+                train_annualized=best_ann,
+                test_annualized=r.annualized_net,
+                test_episodes=len(r.episodes),
+            )
+        )
+        oos.extend(r.episodes)
+        start += test_n
+    return FundingRoundResult(windows, oos)
+
+
+def ar1_signal(rates: pd.Series, window: int) -> pd.Series:
+    """Causal AR(1) one-step forecast of the next funding rate (C1b,
+    persistence conditioning). Fitted on the trailing `window` completed
+    intervals; the value at index i uses rates up to i-1 ONLY (the fit
+    through i-1 forecasts interval i, then shift(1) aligns it)."""
+    mu = rates.rolling(window).mean()
+    phi = rates.rolling(window).apply(lambda x: pd.Series(x).autocorr(lag=1), raw=False)
+    forecast = mu + phi * (rates - mu)  # made at end of i, predicts i+1
+    return forecast.shift(1)
+
+
+def walk_forward_signal_capture(
+    funding: pd.DataFrame,
+    signals: dict[str, pd.Series],
+    enter_grid: list[float],
+    exit_grid: list[float],
+    train_n: int,
+    test_n: int,
+    base: CaptureParams = CaptureParams(),
+) -> FundingRoundResult:
+    """Walk-forward where the optimized grid is (signal x enter x exit).
+    Signals are precomputed causally on the FULL series, so test windows use
+    warm signals — exactly what a live trader carrying trailing history has.
+    (The sma baseline computes its 3-9 interval warmup in-slice; that
+    asymmetry is immaterial at these window sizes.)"""
+    funding = funding.reset_index(drop=True)
+    rates = funding["rate"].to_numpy(dtype=float)
+    times = funding["time"].reset_index(drop=True)
+    sig_arrays = {name: s.reset_index(drop=True).to_numpy(dtype=float) for name, s in signals.items()}
+
+    windows: list[FundingWindow] = []
+    oos: list[Episode] = []
+    start = 0
+    while start + train_n + test_n <= len(funding):
+        tr = slice(start, start + train_n)
+        te = slice(start + train_n, start + train_n + test_n)
+
+        best, best_ann = None, float("-inf")
+        for name, arr in sig_arrays.items():
+            for e in enter_grid:
+                for x in exit_grid:
+                    p = replace(base, enter_bps=e, exit_bps=x)
+                    r = _run_episodes(
+                        rates[tr], times.iloc[tr].reset_index(drop=True), arr[tr], p
+                    )
+                    if r.annualized_net > best_ann:
+                        best_ann, best = r.annualized_net, (name, e, x)
+
+        name, e, x = best
+        p = replace(base, enter_bps=e, exit_bps=x)
+        r = _run_episodes(rates[te], times.iloc[te].reset_index(drop=True), sig_arrays[name][te], p)
+        windows.append(
+            FundingWindow(
+                test_start=times.iloc[te.start],
+                params={"signal": name, "enter_bps": e, "exit_bps": x},
                 train_annualized=best_ann,
                 test_annualized=r.annualized_net,
                 test_episodes=len(r.episodes),

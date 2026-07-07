@@ -5,3 +5,8 @@
 2026-07-07T02:05:50.790729+00:00 family=session_breakout range=2021-01-03..2026-06-26 scheme=500/120 costs=0.0001sp/0.0sl oos_exp=-25.83 t=-2.20 trades=588 stability=0.29 result=FAIL
 2026-07-07T02:28:58.575680+00:00 family=tsmom_pooled range=2021-01..2026-06 scheme=500/120 costs=0.7sp/0.2sl oos_exp=-40.04 t=-4.48 trades=302 stability=0.14 result=FAIL
 2026-07-07T02:45:11.327877+00:00 family=funding_capture_pooled range=2021-01..2026-06 scheme=2190/548x8h costs=25bpRT/0.6util mean_ep_net_bps=74.2 t=3.50 episodes=31 stability=1.00 result=PASS
+2026-07-07T04:09:44.282923+00:00 family=funding_capture_pooled range=2021-01..2026-06 scheme=2190/548x8h costs=25bpRT/0.6util mean_ep_net_bps=74.2 t=3.50 episodes=31 stability=1.00 result=PASS
+2026-07-07T04:39:37.064518+00:00 family=funding_capture_m15_kraken range=trailing-1y scheme=frozen-params-transfer costs=25bpRT/0.6util episodes=14 mean_ep_net_bps=19.6 result=PASS-provisional
+2026-07-07T05:43:05.473883+00:00 family=funding_capture_ar1_retune range=2021-01..2026-06 scheme=2190/548x8h costs=25bpRT/0.6util mean_ep_net_bps=67.2 t=3.04 episodes=31 stability=1.00 baseline_bps=74.2 result=FAIL
+2026-07-07T05:46:39.281588+00:00 family=funding_capture_altsyms range=2021-01..2026-06 scheme=2190/548x8h costs=35bpRT/0.6util mean_ep_net_bps=60.0 t=2.15 episodes=27 stability=0.62 result=FAIL
+2026-07-07T05:50:38.444429+00:00 family=funding_timing_micro range=2023-07..2026-06 scheme=event-study costs=25bpRT gate_events=0 best_delta=5m best_mean_net_bps=0.0 t=0.00 result=FAIL
