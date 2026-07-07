@@ -171,6 +171,28 @@ def test_risk_breach_halts_and_liquidates():
     assert res.final_equity < 47_500.0  # below the daily floor, as recorded
 
 
+def test_intrabar_trough_breaches_even_if_close_recovers():
+    """The firm marks tick-by-tick. A bar that dips through the daily-loss
+    floor and closes back above it kills the real account — the backtest must
+    see the same death (review finding #3)."""
+    bars = flat_bars(20, price=1.1000)
+    # bar 6 dips 85 pips (inside the 100-pip stop) and fully recovers
+    bars.loc[6, "low"] = 1.1000 - 85 * PIP
+    # sizing: daily floor 4% => headroom $2000; risk 5% & safety 0.5 -> 2.5 lots
+    bt = _bt(
+        daily_loss_frac=0.04,
+        risk_per_trade_frac=0.05,
+        daily_headroom_safety_factor=0.5,
+    )
+    res = bt.run(bars, BuyOnce(at_bar=0, sl=100.0, tp=100.0))
+    # trough loss ~ 85 pips * $10 * 2.5 = $2,125 > $2,000 headroom -> breach
+    assert res.halted_at is not None
+    assert res.violations[0].kind == "daily_loss"
+    assert res.trades.iloc[0]["reason"] == "risk_breach"
+    # close-marked equity alone would NOT have breached: the bar closed flat
+    assert bars.loc[6, "close"] == 1.1000
+
+
 def test_entries_blocked_when_risk_engine_returns_zero():
     bars = flat_bars(10)
     bt = _bt()

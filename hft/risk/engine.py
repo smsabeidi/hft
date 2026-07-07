@@ -12,8 +12,9 @@ Semantics:
 - A BREACH is a recorded violation and permanently halts trading (in the
   evaluation business, a breach is account death — the engine treats it that way).
 - Before a breach ever happens, the engine BLOCKS new entries whose worst-case
-  loss (stop distance + costs, times a safety factor) doesn't fit inside the
-  remaining daily/total headroom. Blocking is normal operation; breaching is failure.
+  loss (stop distance times a safety factor, the factor sized to also absorb
+  spread/slippage/commission) doesn't fit inside the remaining daily/total
+  headroom. Blocking is normal operation; breaching is failure.
 """
 
 from __future__ import annotations

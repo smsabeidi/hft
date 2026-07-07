@@ -63,14 +63,24 @@ exists so urgency can't skip it.
 ## Known approximations (documented, deliberate)
 
 - Swap charged at UTC midnight (real FX rollover is 17:00 New York); tripled
-  Wednesdays. Recalibrated against the demo broker at the demo gate.
+  on the Wed->Thu rollover (T+2 value-date jump). Recalibrated against the
+  demo broker at the demo gate.
 - Bar-granularity engine (M1) with per-bar recorded spread: right for
   minutes-to-days holding periods, wrong for sub-bar strategies — don't put
   sub-bar families through it.
 - Stops fill at the stop price minus slippage, or at the bar OPEN when a bar
   gaps through the stop (gaps don't honor stops).
+- Risk breaches are checked against the WORST intrabar equity (the firm marks
+  tick-by-tick), and a breach liquidates and halts the run permanently.
+- Wide-spread ticks (rollover/news/session-open) are REAL costs: the sanity
+  pass reports them but keeps them by default, so per-bar mean spread feeds
+  honest fills. `drop_spread_outliers=True` only for known-corrupt feeds.
 - Backtests assume a USD-quoted pair and USD account (pip value $10/lot).
   Extend `CostModel` before adding crosses.
+
+Parity tooling: `scripts/parity_check.py` diffs the Python trade log against
+the EA's parity CSV (gate 3). The MQL5 EA converts broker server time to UTC
+via a measured offset — verify the offset line in the EA log on first run.
 
 This project is personal research software, not investment advice. Trading
 involves substantial risk of loss.

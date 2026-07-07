@@ -39,8 +39,9 @@ class WindowResult:
 class WalkForwardResult:
     windows: list[WindowResult]
     oos_trades: pd.DataFrame
+    oos_equity: pd.DataFrame  # chained across windows (no reset jumps)
     oos_metrics: Metrics
-    stability: float  # fraction of test windows with positive expectancy
+    stability: float  # fraction of ALL test windows with positive expectancy
 
     def passed(self, min_stability: float = 0.6) -> bool:
         return (
@@ -94,6 +95,7 @@ def walk_forward(
     windows: list[WindowResult] = []
     oos_frames: list[pd.DataFrame] = []
     oos_equity_frames: list[pd.DataFrame] = []
+    equity_offset = 0.0  # chains window equity so Sharpe/DD see one account
 
     start = 0
     while start + train_bars + test_bars <= len(bars):
@@ -106,6 +108,22 @@ def walk_forward(
             score = m.expectancy_usd if m.n_trades > 0 else float("-inf")
             if score > best_exp:
                 best_exp, best_params = score, params
+
+        if best_params is None:
+            # no parameter set traded in train: a zero-trade window, not a crash
+            windows.append(
+                WindowResult(
+                    train_start=train["time"].iloc[0],
+                    test_start=test["time"].iloc[0],
+                    test_end=test["time"].iloc[-1],
+                    params={},
+                    train_expectancy=0.0,
+                    test_expectancy=0.0,
+                    test_trades=0,
+                )
+            )
+            start += test_bars
+            continue
 
         bt = Backtester(cost_model, risk_factory(), initial_balance)
         res = bt.run(test, strategy_factory(**best_params))
@@ -125,7 +143,13 @@ def walk_forward(
         if len(res.trades):
             oos_frames.append(res.trades)
         if len(res.equity):
-            oos_equity_frames.append(res.equity)
+            # rebase this window onto the prior window's ending equity so the
+            # concatenated curve has no fake reset-to-initial jumps
+            eq = res.equity.copy()
+            eq["equity"] += equity_offset
+            eq["balance"] += equity_offset
+            oos_equity_frames.append(eq)
+            equity_offset += res.final_equity - initial_balance
         start += test_bars
 
     oos_trades = (
@@ -135,8 +159,11 @@ def walk_forward(
         pd.concat(oos_equity_frames, ignore_index=True) if oos_equity_frames else pd.DataFrame(columns=["time", "equity"])
     )
     oos_metrics = compute_metrics(oos_trades, oos_equity)
-    traded = [w for w in windows if w.test_trades > 0]
+    # zero-trade windows count AGAINST stability: params that go silent
+    # out-of-sample are evidence of instability, not missing data
     stability = (
-        sum(1 for w in traded if w.test_expectancy > 0) / len(traded) if traded else 0.0
+        sum(1 for w in windows if w.test_trades > 0 and w.test_expectancy > 0) / len(windows)
+        if windows
+        else 0.0
     )
-    return WalkForwardResult(windows, oos_trades, oos_metrics, stability)
+    return WalkForwardResult(windows, oos_trades, oos_equity, oos_metrics, stability)

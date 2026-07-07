@@ -5,18 +5,29 @@
 //| NOT a validated edge: deploy to DEMO only after it passes the    |
 //| harness gauntlet and the parity gate (design doc phase gates).   |
 //|                                                                  |
+//| CLOCK DISCIPLINE: all session logic runs in UTC because the      |
+//| research data (Dukascopy) is UTC. Broker servers usually run     |
+//| UTC+2/+3, so bar times are converted via the server-UTC offset   |
+//| (auto-detected, or set InpServerUTCOffsetMinutes manually and    |
+//| verify it in the log at init). The risk engine's DAY boundary    |
+//| intentionally stays on SERVER time — confirm it matches the      |
+//| firm's daily-reset clock when pinning the rulebook.              |
+//|                                                                  |
 //| Live-ops rules implemented here (design doc, Live operations):   |
 //| - every position carries a server-side SL and TP from the        |
 //|   moment it exists (set in the OrderSend itself)                 |
 //| - no new entries while disconnected; open positions stay         |
 //|   protected by their resting server-side stops                   |
-//| - state re-sync from open positions on restart (by magic)        |
-//| - heartbeat log line + GlobalVariable timestamp every bar        |
-//| - push notifications on fills, halts, and errors                 |
+//| - a risk breach liquidates our position immediately and halts    |
+//|   the EA permanently (survives restarts via GlobalVariables)     |
+//| - one-trade-per-day state survives restarts too                  |
+//| - all closes are by ticket + magic, never by bare symbol         |
+//| - heartbeat GlobalVariable + log; push notifications on          |
+//|   fills, halts, and errors                                       |
 //| - parity CSV trade log in the COMMON files folder                |
 //+------------------------------------------------------------------+
 #property copyright "HFT harness"
-#property version   "0.10"
+#property version   "0.20"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -31,7 +42,11 @@ input double InpSafetyFactor     = 2.0;     // own policy: headroom safety
 input double InpMaxLots          = 5.0;     // firm max lots
 input bool   InpRulesVerified    = false;   // set true ONLY after pinning the firm rulebook
 
-//--- strategy params (from walk-forward; frozen for demo)
+//--- clock (see header). Auto mode measures TimeCurrent()-TimeGMT() at init.
+input bool   InpServerUTCOffsetAuto    = true;
+input int    InpServerUTCOffsetMinutes = 0;  // used when auto=false
+
+//--- strategy params (from walk-forward; frozen for demo). ALL HOURS ARE UTC.
 input int    InpAsianStartHour   = 0;       // UTC
 input int    InpAsianEndHour     = 7;       // UTC
 input int    InpLondonEndHour    = 12;      // UTC
@@ -48,10 +63,14 @@ CTrade      trade;
 CRiskEngine risk;
 
 double   g_pip;                 // pip size in price units (10 * _Point on 5-digit)
+int      g_srv_offset_sec = 0;  // server time minus UTC, seconds
 double   g_asian_hi, g_asian_lo;
-datetime g_day = 0;
+datetime g_day = 0;             // current UTC day
 bool     g_traded_today = false;
 datetime g_last_bar = 0;
+
+string   TradedGV() { return "TD_" + (string)InpMagic; }
+datetime UTCDay(const datetime t_utc) { return (datetime)(t_utc - (t_utc % 86400)); }
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -72,22 +91,34 @@ int OnInit()
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetDeviationInPoints(20);
 
+   // one clock: everything strategic is UTC; offset converts server-stamped bars
+   if(InpServerUTCOffsetAuto)
+     {
+      const long raw = (long)TimeCurrent() - (long)TimeGMT();
+      g_srv_offset_sec = (int)(MathRound(raw / 1800.0) * 1800);   // nearest 30 min
+     }
+   else
+      g_srv_offset_sec = InpServerUTCOffsetMinutes * 60;
+   PrintFormat("server-UTC offset: %+d minutes (%s) — VERIFY this matches the broker",
+               g_srv_offset_sec / 60, InpServerUTCOffsetAuto ? "auto" : "manual");
+
    if(!risk.Init(InpInitialBalance, InpDailyLossFrac, InpTotalDDFrac,
                  InpRiskPerTrade, InpSafetyFactor, InpMaxLots,
                  "RISK_" + (string)InpMagic))
       return(INIT_FAILED);
 
-   // restart re-sync: an open position of ours means mid-trade restart
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   // restart re-sync: open position OR persisted traded-today marker
+   g_day = UTCDay(TimeGMT());
+   if(HasPosition())
      {
-      const ulong ticket = PositionGetTicket(i);
-      if(PositionSelectByTicket(ticket) &&
-         PositionGetInteger(POSITION_MAGIC) == InpMagic &&
-         PositionGetString(POSITION_SYMBOL) == _Symbol)
-        {
-         g_traded_today = true;
-         PrintFormat("re-sync: found open position #%I64u, resuming management", ticket);
-        }
+      g_traded_today = true;
+      Print("re-sync: open position found, resuming management");
+     }
+   if(GlobalVariableCheck(TradedGV()) &&
+      (datetime)GlobalVariableGet(TradedGV()) == g_day)
+     {
+      g_traded_today = true;
+      Print("re-sync: already traded today (persisted marker)");
      }
    ParityLogHeader();
    Print("SessionBreakout initialized");
@@ -97,7 +128,12 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   risk.OnTickUpdate();
+   // risk mark runs on every tick; a breach liquidates immediately
+   if(risk.OnTickUpdate())
+     {
+      CloseOurPositions("risk_breach");
+      return;
+     }
 
    // act once per closed M1 bar — decisions on closed bars only,
    // mirroring the Python engine's decide-on-close/fill-next-open rule
@@ -105,12 +141,10 @@ void OnTick()
    if(bar_time == g_last_bar)
       return;
    g_last_bar = bar_time;
-   Heartbeat(bar_time);
+   Heartbeat();
 
-   const MqlDateTime now = TimeToStruct_(TimeGMT());
-
-   // new day: reset range state
-   const datetime today = (datetime)(TimeGMT() - (TimeGMT() % 86400));
+   // new UTC day: reset range state
+   const datetime today = UTCDay(TimeGMT());
    if(today != g_day)
      {
       g_day = today;
@@ -119,11 +153,13 @@ void OnTick()
       g_traded_today = false;
      }
 
-   // use the last CLOSED bar for all decisions
+   // last CLOSED bar, converted to UTC for all session decisions
    const double c_close = iClose(_Symbol, PERIOD_M1, 1);
    const double c_high  = iHigh(_Symbol, PERIOD_M1, 1);
    const double c_low   = iLow(_Symbol, PERIOD_M1, 1);
-   const MqlDateTime bt = TimeToStruct_(iTime(_Symbol, PERIOD_M1, 1));
+   const datetime bar_utc = iTime(_Symbol, PERIOD_M1, 1) - g_srv_offset_sec;
+   MqlDateTime bt;
+   TimeToStruct(bar_utc, bt);
 
    // Asian session: build the range
    if(bt.hour >= InpAsianStartHour && bt.hour < InpAsianEndHour)
@@ -136,7 +172,7 @@ void OnTick()
    // time-stop
    if(HasPosition() && bt.hour >= InpSessionEndHour)
      {
-      trade.PositionClose(_Symbol);
+      CloseOurPositions("time_stop");
       return;
      }
 
@@ -147,7 +183,7 @@ void OnTick()
    if(bt.hour < InpAsianEndHour || bt.hour >= InpLondonEndHour)
       return;
 
-   // never trade while disconnected (design doc disconnect policy)
+   // never open new positions while disconnected (design doc policy)
    if(!TerminalInfoInteger(TERMINAL_CONNECTED))
       return;
 
@@ -171,26 +207,22 @@ void OnTick()
       // SL/TP travel inside the OrderSend — the position is never naked
       if(trade.Buy(lots, _Symbol, 0.0,
                    ask - sl_pips * g_pip, ask + tp_pips * g_pip, "sb_long"))
-        {
-         g_traded_today = true;
-         Notify(StringFormat("SB long %.2f lots, sl=%.1fp tp=%.1fp", lots, sl_pips, tp_pips));
-        }
+         MarkTradedToday(StringFormat("SB long %.2f lots, sl=%.1fp tp=%.1fp",
+                                      lots, sl_pips, tp_pips));
      }
    else if(c_close < g_asian_lo)
      {
       const double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       if(trade.Sell(lots, _Symbol, 0.0,
                     bid + sl_pips * g_pip, bid - tp_pips * g_pip, "sb_short"))
-        {
-         g_traded_today = true;
-         Notify(StringFormat("SB short %.2f lots, sl=%.1fp tp=%.1fp", lots, sl_pips, tp_pips));
-        }
+         MarkTradedToday(StringFormat("SB short %.2f lots, sl=%.1fp tp=%.1fp",
+                                      lots, sl_pips, tp_pips));
      }
   }
 
 //+------------------------------------------------------------------+
 //| Parity CSV: one row per closed deal, diffed against the Python   |
-//| harness trade log by the parity gate.                            |
+//| harness trade log by scripts/parity_check.py.                    |
 //+------------------------------------------------------------------+
 void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest &request,
@@ -234,6 +266,32 @@ bool HasPosition()
    return(false);
   }
 
+//--- close ONLY our positions, by ticket + magic — never by bare symbol
+void CloseOurPositions(const string reason)
+  {
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      const ulong ticket = PositionGetTicket(i);
+      if(PositionSelectByTicket(ticket) &&
+         PositionGetInteger(POSITION_MAGIC) == InpMagic &&
+         PositionGetString(POSITION_SYMBOL) == _Symbol)
+        {
+         if(!trade.PositionClose(ticket))
+            Notify(StringFormat("close FAILED (%s) ticket=%I64u err=%d",
+                                reason, ticket, GetLastError()));
+         else
+            Notify(StringFormat("closed ticket=%I64u (%s)", ticket, reason));
+        }
+     }
+  }
+
+void MarkTradedToday(const string msg)
+  {
+   g_traded_today = true;
+   GlobalVariableSet(TradedGV(), (double)g_day);  // survives restarts
+   Notify(msg);
+  }
+
 void ParityLogHeader()
   {
    if(FileIsExist(InpParityLog, FILE_COMMON))
@@ -246,10 +304,10 @@ void ParityLogHeader()
    FileClose(fh);
   }
 
-void Heartbeat(const datetime t)
+void Heartbeat()
   {
    GlobalVariableSet("HB_" + (string)InpMagic, (double)TimeCurrent());
-   if(t % 900 == 0)  // one log line per 15 minutes
+   if(TimeCurrent() % 900 < 60)  // roughly one log line per 15 minutes
       PrintFormat("heartbeat: equity=%.2f halted=%d",
                   AccountInfoDouble(ACCOUNT_EQUITY), risk.Halted());
   }
@@ -258,11 +316,4 @@ void Notify(const string msg)
   {
    Print(msg);
    SendNotification(msg);
-  }
-
-MqlDateTime TimeToStruct_(const datetime t)
-  {
-   MqlDateTime s;
-   TimeToStruct(t, s);
-   return(s);
   }

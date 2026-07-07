@@ -171,13 +171,18 @@ class Backtester:
                     position = None
 
             # --- mark equity and risk-check ----------------------------------
+            # The firm marks tick-by-tick, so the risk check uses the WORST
+            # intrabar equity a surviving position saw, not just the close.
             unrealized = 0.0
+            worst_unrealized = 0.0
             if position is not None:
                 unrealized = self._unrealized(position, bar)
+                worst_unrealized = self._unrealized_at_worst(position, bar)
             equity = balance + unrealized
+            worst_equity = balance + min(unrealized, worst_unrealized)
             equity_rows.append((t, equity, balance))
 
-            if self.risk.on_mark(equity, t):
+            if self.risk.on_mark(worst_equity, t):
                 # breach: liquidate at current close, halt everything
                 if position is not None:
                     balance, trade = self._close_position(
@@ -186,6 +191,8 @@ class Backtester:
                     trades.append(trade)
                     position = None
                 equity = balance
+                # the breach bar's equity row must reflect the liquidation
+                equity_rows[-1] = (t, equity, balance)
                 halted_at = t
 
             # --- let the strategy decide (fills next bar) --------------------
@@ -213,6 +220,15 @@ class Backtester:
         else:
             ask_close = self._ask(bar["close"], bar)
             px_pnl = (p.entry_price - ask_close) * self.costs.contract_size * p.lots
+        return px_pnl + p.swap_usd
+
+    def _unrealized_at_worst(self, p: Position, bar) -> float:
+        """Unrealized P&L at the bar's worst point for this position."""
+        if p.side > 0:
+            px_pnl = (bar["low"] - p.entry_price) * self.costs.contract_size * p.lots
+        else:
+            ask_high = bar["high"] + self.costs.spread(bar.get("spread"))
+            px_pnl = (p.entry_price - ask_high) * self.costs.contract_size * p.lots
         return px_pnl + p.swap_usd
 
     def _check_exits(self, p: Position, bar) -> tuple[float | None, str]:

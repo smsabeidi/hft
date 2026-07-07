@@ -6,9 +6,11 @@ Conventions (used everywhere in the harness — the MQL5 side mirrors them):
   pip_size * contract_size = $10. The model assumes a USD-quote pair and a USD
   account; extend before trading anything else.
 - Slippage is adverse on every market/stop fill, zero on limit fills.
-- Swap is charged per UTC-midnight rollover held, tripled on triple_swap_weekday
-  (Wednesday for T+2 FX). This is an approximation of the 17:00 NY rollover —
-  documented, deliberate, and recalibrated against the demo broker later.
+- Swap is charged per UTC-midnight rollover held. triple_swap_weekday is the
+  weekday of the NEW day at rollover: under T+2 the Wed->Thu rollover carries
+  the weekend value-date jump, so the default is Thursday (3). This
+  approximates the 17:00 NY rollover — documented, deliberate, and
+  recalibrated against the demo broker at the demo gate.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ class CostModel:
     slippage_pips: float = 0.2
     swap_long_pips_per_day: float = -0.55
     swap_short_pips_per_day: float = 0.15
-    triple_swap_weekday: int = 2  # Wednesday (Monday=0)
+    triple_swap_weekday: int = 3  # weekday of the NEW day: Thursday (Monday=0)
 
     @property
     def pip_value_per_lot(self) -> float:

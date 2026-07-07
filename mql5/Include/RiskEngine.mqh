@@ -2,19 +2,23 @@
 //| RiskEngine.mqh — prop-firm risk engine, MQL5 side.               |
 //|                                                                  |
 //| MIRRORS hft/risk/engine.py method-for-method. The parity gate    |
-//| (design doc, Recommended Approach) diffs decisions between the   |
-//| two implementations on identical data. If you change semantics   |
-//| here, change the Python reference FIRST, then re-run parity.     |
+//| (scripts/parity_check.py) diffs decisions between the two        |
+//| implementations on identical data. If you change semantics here, |
+//| change the Python reference FIRST, then re-run parity.           |
 //|                                                                  |
 //| Semantics:                                                       |
 //| - daily loss floor  = day_anchor - daily_frac * initial_balance  |
-//|   (day anchor = max(balance, equity) at server-day rollover)     |
+//|   (day anchor = max(balance, equity) at server-day rollover;     |
+//|   CONFIRM the firm's dashboard resets at server midnight when    |
+//|   pinning the rulebook — FTMO uses CE(S)T, which matches the     |
+//|   server clock of most FTMO-feed brokers)                        |
 //| - total dd floor    = initial_balance * (1 - total_frac)         |
-//| - a BREACH permanently halts the EA (account death in the        |
-//|   evaluation business) and fires a push notification             |
+//| - a BREACH permanently halts the EA — it survives restarts,      |
+//|   redeploys, and new days. Account death is not day-scoped.      |
 //| - BLOCKING (AllowedLots -> 0) is normal operation, not failure   |
-//| - state persists in GlobalVariables so a terminal restart        |
-//|   re-syncs instead of resetting the day anchor                   |
+//| - sizing: worst-case loss = stop distance x safety factor (the   |
+//|   factor sized to also absorb spread/slippage/commission), must  |
+//|   fit inside remaining daily AND total headroom                  |
 //+------------------------------------------------------------------+
 #property copyright "HFT harness"
 #property strict
@@ -61,24 +65,28 @@ public:
       m_max_lots        = max_lots;
       m_gv              = gv_prefix;
 
-      // restart re-sync: recover anchor/halt state if same server day
+      // a halt is PERMANENT: restore it regardless of what day it is
+      m_halted = GlobalVariableCheck(m_gv + "_halted") &&
+                 GlobalVariableGet(m_gv + "_halted") > 0.5;
+
+      // the day anchor is day-scoped: restore only within the same server day
       if(GlobalVariableCheck(m_gv + "_day") &&
          (datetime)GlobalVariableGet(m_gv + "_day") == DayOf(TimeCurrent()))
         {
          m_day_anchor = GlobalVariableGet(m_gv + "_anchor");
-         m_halted     = GlobalVariableGet(m_gv + "_halted") > 0.5;
          m_day_start  = (datetime)GlobalVariableGet(m_gv + "_day");
-         PrintFormat("RiskEngine: re-synced from GV (anchor=%.2f halted=%d)",
+         PrintFormat("RiskEngine: re-synced (anchor=%.2f halted=%d)",
                      m_day_anchor, m_halted);
         }
       else
         {
          m_day_anchor = MathMax(AccountInfoDouble(ACCOUNT_BALANCE),
                                 AccountInfoDouble(ACCOUNT_EQUITY));
-         m_halted     = false;
          m_day_start  = DayOf(TimeCurrent());
-         Persist();
         }
+      if(m_halted)
+         Print("RiskEngine: account is BREACHED (persisted state). Trading stays halted.");
+      Persist();
       return(true);
      }
 
@@ -86,8 +94,8 @@ public:
    double            TotalDDFloor()    const { return m_initial_balance * (1.0 - m_total_frac); }
    bool              Halted()          const { return m_halted; }
 
-   //--- call on every tick: handles day rollover + equity mark ------------
-   void              OnTickUpdate()
+   //--- call on every tick; returns true when a breach JUST happened -------
+   bool              OnTickUpdate()
      {
       const datetime today = DayOf(TimeCurrent());
       if(today != m_day_start)
@@ -97,7 +105,7 @@ public:
                                 AccountInfoDouble(ACCOUNT_EQUITY));
          Persist();
         }
-      MarkEquity(AccountInfoDouble(ACCOUNT_EQUITY));
+      return(MarkEquity(AccountInfoDouble(ACCOUNT_EQUITY)));
      }
 
    //--- returns true when a breach just happened ---------------------------
@@ -143,11 +151,15 @@ public:
       const double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
       const double vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
       const double vmax = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+      // floor to the step, NEVER round up (rounding up = more risk than sized).
+      // the 1e-9 guards against FP dust pushing a whole step down; the final
+      // NormalizeDouble(_, 8) only strips representation noise, it cannot
+      // cross a 0.001-or-coarser volume step.
       if(step > 0.0)
-         lots = MathFloor(lots / step) * step;
+         lots = MathFloor(lots / step + 1e-9) * step;
       lots = MathMin(lots, vmax);
       if(lots < vmin)
          return(0.0);
-      return(NormalizeDouble(lots, 2));
+      return(NormalizeDouble(lots, 8));
      }
   };

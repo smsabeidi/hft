@@ -58,6 +58,56 @@ def test_random_strategy_fails_walkforward():
     assert not res.passed()
 
 
+class NeverTrades:
+    def on_bar(self, ctx):
+        pass
+
+
+def test_zero_trade_train_windows_recorded_not_crashed():
+    """If no parameter set trades in a train window the round must record a
+    zero-trade window and keep going (review finding #9), and those windows
+    must count AGAINST stability (finding #7)."""
+    bars = make_bars(3000, seed=17)
+    res = walk_forward(
+        bars,
+        strategy_factory=lambda: NeverTrades(),
+        param_grid={},
+        train_bars=1000,
+        test_bars=500,
+        cost_model=CostModel(),
+        risk_factory=_risk_factory(),
+    )
+    assert len(res.windows) == 4
+    assert all(w.test_trades == 0 for w in res.windows)
+    assert res.stability == 0.0
+    assert not res.passed()
+
+
+def test_oos_equity_is_chained_across_windows():
+    """Window equity must be rebased onto the prior window's ending equity so
+    Sharpe/drawdown never see fake reset-to-initial jumps (review finding #6)."""
+    bars = make_bars(3000, seed=11)
+    test_bars = 500
+    res = walk_forward(
+        bars,
+        strategy_factory=lambda every_bars: RandomFlipper(every_bars=every_bars, seed=3),
+        param_grid={"every_bars": [30]},
+        train_bars=1000,
+        test_bars=test_bars,
+        cost_model=CostModel(),
+        risk_factory=_risk_factory(),
+    )
+    eq = res.oos_equity["equity"].to_numpy()
+    assert len(eq) == len(res.windows) * test_bars
+    # at every window boundary the curve must be continuous: the first mark of
+    # window k (no trade filled yet) equals the final equity of window k-1
+    for k in range(1, len(res.windows)):
+        prev_last = eq[k * test_bars - 1]
+        next_first = eq[k * test_bars]
+        assert next_first == pytest.approx(prev_last, abs=1e-6)
+    assert res.oos_equity["time"].is_monotonic_increasing
+
+
 def test_insufficient_data_raises():
     bars = make_bars(100)
     with pytest.raises(ValueError, match="not enough bars"):

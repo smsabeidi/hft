@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from hft.data.sanity import validate_ticks
 
@@ -36,11 +37,17 @@ def test_bad_ticks_dropped_not_modified():
     clean, report = validate_ticks(t)
     assert report.bad_price == 1
     assert report.crossed_spread == 1
+    # wide spreads are REAL costs (rollover/news): reported, NOT dropped by default
     assert report.spread_outliers == 1
-    assert report.dropped == 3
-    assert len(clean) == 3
-    # surviving prices are untouched
-    assert (clean["bid"] == 1.1000).all()
+    assert report.dropped == 2
+    assert len(clean) == 4
+    assert (clean["bid"] == 1.1000).all()  # surviving prices are untouched
+    assert clean["ask"].max() == pytest.approx(1.10200)  # the wide tick survives
+
+    # opt-in dropping for feeds with known-corrupt spread data
+    clean2, report2 = validate_ticks(t, drop_spread_outliers=True)
+    assert report2.dropped == 3
+    assert len(clean2) == 3
 
 
 def test_price_jump_flagged():

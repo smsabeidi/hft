@@ -30,8 +30,11 @@ def test_naive_strategy_loses_after_costs():
 def test_costless_random_is_roughly_flat():
     """Sanity check the other direction: with zero costs the same strategy
     should be near zero expectancy — proving the losses above come from the
-    cost model, not an engine bias."""
-    bars = make_bars(7000, seed=99)
+    cost model, not an engine bias. The bars themselves must carry ZERO
+    spread here: the engine prefers the bar's recorded spread over the cost
+    model default, so a 'costless' CostModel over 0.7-pip bars is not
+    costless (review finding #4)."""
+    bars = make_bars(7000, seed=99, spread_pips=0.0)
     cm = CostModel(
         default_spread_pips=0.0,
         commission_per_lot_side=0.0,

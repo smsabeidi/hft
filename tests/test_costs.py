@@ -25,12 +25,14 @@ def test_round_trip_cost():
 
 
 def test_swap_signs_and_triple():
-    cm = CostModel(swap_long_pips_per_day=-0.55, swap_short_pips_per_day=0.15, triple_swap_weekday=2)
+    cm = CostModel(swap_long_pips_per_day=-0.55, swap_short_pips_per_day=0.15)
     # one normal night, long, 1 lot: -0.55 pips * $10 = -$5.50
     assert cm.swap(+1, 1.0, [0]) == pytest.approx(-5.50)
-    # Wednesday rollover = triple
-    assert cm.swap(+1, 1.0, [2]) == pytest.approx(-16.50)
+    # Wed->Thu rollover (new-day weekday 3) carries the T+2 triple
+    assert cm.swap(+1, 1.0, [3]) == pytest.approx(-16.50)
+    # Tue->Wed rollover (new-day weekday 2) is a normal night
+    assert cm.swap(+1, 1.0, [2]) == pytest.approx(-5.50)
     # short earns here
     assert cm.swap(-1, 1.0, [0]) == pytest.approx(1.50)
-    # multiple nights accumulate
-    assert cm.swap(+1, 2.0, [0, 2]) == pytest.approx((-5.50 - 16.50) * 2)
+    # a full week of rollovers = 7 nights charged (5 charges, Thu tripled)
+    assert cm.swap(+1, 1.0, [1, 2, 3, 4, 0]) == pytest.approx(-0.55 * 7 * 10)

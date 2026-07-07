@@ -5,12 +5,16 @@ make a bad strategy look good. Every dataset passes through here before any
 backtest consumes it. We DROP bad ticks; we never modify prices.
 
 Checks:
-- non-positive or NaN prices
-- negative or crossed spreads (ask < bid)
-- spread outliers (> outlier_mult x median spread)
-- price jumps between consecutive ticks (> jump_pips)
-- non-monotonic timestamps
-- session gaps (no ticks for > max_gap_minutes during weekday trading hours)
+- non-positive or NaN prices                      (dropped)
+- negative or crossed spreads (ask < bid)         (dropped)
+- price jumps between consecutive ticks           (dropped)
+- spread outliers (> outlier_mult x median)       (REPORTED, kept by default:
+  wide spreads at rollover/news/session-open are REAL trading costs, and a
+  session-open strategy trades straight into them. Dropping them would
+  sanitize the cost distribution the fill model feeds on. Set
+  drop_spread_outliers=True only for feeds with known corrupt spread data.)
+- non-monotonic timestamps                        (counted, sorted)
+- session gaps during weekday trading hours       (reported)
 """
 
 from __future__ import annotations
@@ -62,6 +66,7 @@ def validate_ticks(
     outlier_mult: float = 10.0,
     jump_pips: float = 30.0,
     max_gap_minutes: int = 15,
+    drop_spread_outliers: bool = False,
 ) -> tuple[pd.DataFrame, SanityReport]:
     """Return (clean_ticks, report). Bad ticks are dropped, never altered."""
     report = SanityReport(total_ticks=len(ticks))
@@ -90,7 +95,8 @@ def validate_ticks(
         if med > 0:
             outlier = spread > outlier_mult * med
             report.spread_outliers = int(outlier.sum())
-            t = t[~outlier]
+            if drop_spread_outliers:
+                t = t[~outlier]
 
     if len(t) > 1:
         jump = t["bid"].diff().abs() > jump_pips * pip_size
