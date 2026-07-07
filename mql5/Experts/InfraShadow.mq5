@@ -13,7 +13,7 @@
 //| it LOGS the flag loudly so the missing rulebook pin stays visible.|
 //+------------------------------------------------------------------+
 #property copyright "HFT harness"
-#property version   "0.10"
+#property version   "1.00"
 #property strict
 
 #include <RiskEngine.mqh>
