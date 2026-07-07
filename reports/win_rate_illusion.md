@@ -45,6 +45,23 @@ the design doc's hard-fail rule exists to reject ("any strategy relying on
 martingale, grid, or averaging-down is rejected regardless of win rate" —
 this is the same pathology without the position-sizing accelerant).
 
+## Addendum 2026-07-07: the founder's own tester window, wrapped in grail geometry
+
+The founder ran SessionBreakout in the MT5 Strategy Tester (EURUSD,
+2025-07..2026-06, 100% history quality): 209 trades, 47.4% win rate,
++3,542 on 100k, profit factor 1.07 — which is a t-stat of ~0.5 (60%
+probability of this profit with ZERO edge), LR correlation -0.27, and a
+12.30% max drawdown that breaches FTMO's 10% total limit mid-year: a blown
+evaluation that happens to end green. One noise-level green year at frozen
+params is fully consistent with the 5.5y refutation.
+
+The same window through the illusion machinery (--from-date 2025-07-01):
+the 97.6%-win-rate geometry loses 2,569 pips (t=-3.9) with a 2,670-pip max
+drawdown — roughly -$25,700/lot over the year the founder's run made
++$3,542. The requested "perfect win rate," delivered and priced, on the
+founder's own data window. Win rate and profitability are not the same
+axis; on this window they point in opposite directions.
+
 ## What each requested property actually costs
 
 A 100% win rate with a 1:3 or 1:5 stop:target is an arithmetic

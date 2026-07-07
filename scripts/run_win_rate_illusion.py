@@ -44,9 +44,21 @@ SPECS = [
 
 
 def main() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--from-date", default=None, help="restrict window, e.g. 2025-07-01")
+    ap.add_argument("--to-date", default=None)
+    args = ap.parse_args()
+
     files = sorted(BARS_DIR.glob("EURUSD_M1_*.parquet"))
     bars = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     bars = bars.sort_values("time", ignore_index=True)
+    if args.from_date:
+        bars = bars[bars["time"] >= pd.Timestamp(args.from_date, tz="UTC")]
+    if args.to_date:
+        bars = bars[bars["time"] <= pd.Timestamp(args.to_date, tz="UTC")]
+    bars = bars.reset_index(drop=True)
     print(f"EURUSD M1: {len(bars):,} bars, {bars['time'].iloc[0].date()} .. "
           f"{bars['time'].iloc[-1].date()}")
 
