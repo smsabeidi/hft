@@ -22,7 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from hft.crypto.paper_funding import PaperFundingEngine, PaperParams
 
-STATE = Path(__file__).resolve().parents[1] / "data" / "paper" / "funding_state.json"
+PAPER_DIR = Path(__file__).resolve().parents[1] / "data" / "paper"
+
+
+def state_path(inst: str) -> Path:
+    # one state file PER instrument — round 1 passed on pooled BTC+ETH, so
+    # both run on paper, and their books must never clobber each other
+    return PAPER_DIR / f"funding_state_{inst}.json"
 
 
 def main() -> int:
@@ -31,7 +37,7 @@ def main() -> int:
     ap.add_argument("--once", action="store_true", help="single evaluation (default)")
     args = ap.parse_args()
 
-    engine = PaperFundingEngine(PaperParams(perp_inst=args.inst), STATE)
+    engine = PaperFundingEngine(PaperParams(perp_inst=args.inst), state_path(args.inst))
     result = engine.tick()
     st = engine.state
     print(f"{args.inst}: {result['action']} | position {'ON' if result['on'] else 'OFF'} | "
