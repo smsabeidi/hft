@@ -25,6 +25,23 @@ strategy has passed the Python harness gauntlet.
   source of truth for firm limits; EAs written after 2026-07-07 include this
   and refuse demo/live while `FIRM_RULES_VERIFIED` is false.
 
+## Running the EAs — first guide
+
+Two run modes, each bot belongs in exactly one. LIVE CHART (real time, on
+the connected account): drag from Navigator onto a chart, tick "Allow Algo
+Trading", toolbar Algo Trading button green, blue-hat smiley on the chart
+= running. Only InfraShadow belongs here (the others refuse by design).
+STRATEGY TESTER (history replay, fake money): View -> Strategy Tester,
+pick Expert/Symbol/Period/dates, Optimization ALWAYS Disabled, Start.
+
+Recipes: InfraShadow -> any live chart, leave running (watchdog + phone
+alerts; trades nothing). WinRate80 -> tester, EURUSD M1, 3+ months, "1
+minute OHLC"; gold: XAUUSD with tp=30/sl=180 inputs; visual mode to watch.
+SessionBreakout -> tester, EURUSD ONLY, M5, 2025.07+, "1 minute OHLC"
+(parity instrument; expect noise). Troubleshooting order: Navigator
+refresh -> Algo Trading button -> recipe symbol/dates/optimization ->
+Journal tab (every EA explains its refusals there).
+
 ## Phone cockpit (MT5 mobile)
 
 The mobile app runs NO EAs — platform limit, every account, everyone. The
