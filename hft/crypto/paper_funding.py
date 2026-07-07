@@ -104,7 +104,11 @@ class PaperFundingEngine:
     def tick(self, now_ms: int | None = None) -> dict:
         """One evaluation. Cron-able; idempotent between funding events."""
         now_ms = now_ms or int(time.time() * 1000)
-        hist = self.api.funding_history(self.p.perp_inst, limit=max(self.p.smooth_n, 12))
+        # catch-up window: 30 events = 10 days of 8h funding. A sleeping
+        # laptop that misses cron ticks self-heals on the next run as long as
+        # the gap is inside this window; beyond it, accrued gross would be
+        # silently understated (OKX caps the endpoint at 100).
+        hist = self.api.funding_history(self.p.perp_inst, limit=max(self.p.smooth_n, 30))
         # OKX returns newest first; realized rates only
         rates = [float(h["realizedRate"]) for h in hist if h.get("realizedRate")]
         if len(rates) < self.p.smooth_n:

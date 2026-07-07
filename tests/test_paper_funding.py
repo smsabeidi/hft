@@ -103,6 +103,23 @@ def test_exit_records_episode_net(tmp_path):
     assert eng.state["equity"] == pytest.approx(ep["net"])
 
 
+def test_catches_up_after_missed_ticks(tmp_path):
+    """A sleeping laptop misses cron runs; the next tick must accrue EVERY
+    funding event since the last one it saw, not just the newest."""
+    api = FakeOKX()
+    for ts in (1_000, 2_000, 3_000):
+        api.add_funding(ts, 1e-4)
+    eng = _engine(tmp_path, api)
+    eng.tick(now_ms=10_000)  # enter, last_funding_ts=3000
+    # five funding events land while the laptop was asleep
+    for ts in (4_000, 5_000, 6_000, 7_000, 8_000):
+        api.add_funding(ts, 1e-4)
+    out = eng.tick(now_ms=50_000)
+    assert "accrued 5" in out["action"]
+    assert eng.state["episode_gross"] == pytest.approx(5 * 1e-4 * 0.6)
+    assert eng.state["last_funding_ts"] == 8_000
+
+
 def test_hysteresis_no_entry_between_thresholds(tmp_path):
     api = FakeOKX()
     for ts in (1_000, 2_000, 3_000):
