@@ -29,7 +29,8 @@
 input double InpTakeProfitPips = 10.0;
 input double InpStopLossPips   = 60.0;
 input int    InpEveryMinutes   = 30;    // entry cadence while flat
-input double InpLots           = 0.10;
+input double InpLots           = 1.0;   // 1 lot: EURUSD $10/pip; size scales
+                                        // wins AND stops linearly, never the sign
 input long   InpMagic          = 20260780;
 
 CTrade trade;
