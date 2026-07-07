@@ -11,6 +11,9 @@ class FakeOKX:
     def __init__(self, bid: float = 100.0, ask: float = 100.02):
         self.rates: list[tuple[int, float]] = []
         self.bid, self.ask = bid, ask
+        # per-instrument 1m candle closes: {inst: {minute_ts_ms: close}}
+        self.closes: dict[str, dict[int, float]] = {}
+        self.candles_raise = False
 
     def add_funding(self, ts_ms: int, rate: float) -> None:
         self.rates.append((ts_ms, rate))
@@ -23,6 +26,15 @@ class FakeOKX:
 
     def ticker(self, inst: str) -> dict:
         return {"bidPx": str(self.bid), "askPx": str(self.ask)}
+
+    def candles_1m(self, inst: str, after_ms: int, limit: int = 100) -> list[list[str]]:
+        if self.candles_raise:
+            raise RuntimeError("candle endpoint down")
+        return [
+            [str(ts), "0", "0", "0", str(close)]
+            for ts, close in sorted(self.closes.get(inst, {}).items(), reverse=True)
+            if ts < after_ms
+        ][:limit]
 
 
 PARAMS = PaperParams(smooth_n=3, enter_bps=0.5, exit_bps=0.0, fee_rt_bps=25.0, utilization=0.6)
@@ -141,6 +153,78 @@ def test_state_survives_restart(tmp_path):
     assert eng2.state["on"] is True
     assert eng2.state["equity"] == pytest.approx(-ENTRY_COST)
     assert eng2.state["last_funding_ts"] == 3_000
+
+
+def _entered_engine(tmp_path, api, now_ms: int):
+    """Engine that has just ENTERed at now_ms (smooth = 1bp > threshold)."""
+    for ts in (1_000, 2_000, 3_000):
+        api.add_funding(ts, 1e-4)
+    eng = _engine(tmp_path, api)
+    out = eng.tick(now_ms=now_ms)
+    assert out["action"].startswith("ENTER")
+    return eng
+
+
+def test_enter_records_pending_fill_with_basis(tmp_path):
+    api = FakeOKX()
+    eng = _entered_engine(tmp_path, api, now_ms=600_000)
+    assert len(eng.state["pending_fills"]) == 1
+    fill = eng.state["pending_fills"][0]
+    assert fill["kind"] == "enter"
+    # perp and spot tickers are identical in the fake, so basis == 0
+    assert fill["basis"] == pytest.approx(0.0)
+    assert eng.state["markouts"] == []
+
+
+def test_markouts_resolved_after_horizon(tmp_path):
+    api = FakeOKX()
+    eng = _entered_engine(tmp_path, api, now_ms=600_000)  # fill at t=10min
+    # perp trades 1% below spot at every later minute: basis fell after an
+    # entry (which sells the perp leg) -> favorable -> +100bps markout
+    minutes = [600_000 + m * 60_000 for m in (1, 5, 15, 60)]
+    api.closes["BTC-USDT-SWAP"] = {ts: 99.0 for ts in minutes}
+    api.closes["BTC-USDT"] = {ts: 100.0 for ts in minutes}
+    out = eng.tick(now_ms=600_000 + 63 * 60_000)
+    assert eng.state["pending_fills"] == []
+    assert len(eng.state["markouts"]) == 1
+    mk = eng.state["markouts"][0]
+    assert mk["kind"] == "enter"
+    for m in (1, 5, 15, 60):
+        assert mk[f"m{m}"] == pytest.approx(100.0, abs=0.01)
+
+
+def test_markout_failure_is_retried_not_fatal(tmp_path):
+    api = FakeOKX()
+    eng = _entered_engine(tmp_path, api, now_ms=600_000)
+    api.candles_raise = True
+    out = eng.tick(now_ms=600_000 + 63 * 60_000)  # tick itself must not fail
+    assert out["on"] is True
+    assert len(eng.state["pending_fills"]) == 1
+    assert eng.state["pending_fills"][0]["tries"] == 1
+    # endpoint recovers: next tick resolves the markout
+    api.candles_raise = False
+    minutes = [600_000 + m * 60_000 for m in (1, 5, 15, 60)]
+    api.closes["BTC-USDT-SWAP"] = {ts: 100.0 for ts in minutes}
+    api.closes["BTC-USDT"] = {ts: 100.0 for ts in minutes}
+    eng.tick(now_ms=600_000 + 64 * 60_000)
+    assert eng.state["pending_fills"] == []
+    assert len(eng.state["markouts"]) == 1
+    assert eng.state["markouts"][0]["m5"] == pytest.approx(0.0, abs=0.01)
+
+
+def test_old_state_files_gain_markout_keys(tmp_path):
+    """State files written before markout tracking must load cleanly."""
+    api = FakeOKX()
+    eng = _entered_engine(tmp_path, api, now_ms=600_000)
+    state = eng.state_path.read_text()
+    import json
+
+    s = json.loads(state)
+    del s["pending_fills"], s["markouts"]
+    eng.state_path.write_text(json.dumps(s))
+    eng2 = _engine(tmp_path, api)
+    assert eng2.state["pending_fills"] == []
+    assert eng2.state["markouts"] == []
 
 
 def test_log_is_capped(tmp_path):

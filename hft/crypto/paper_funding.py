@@ -29,6 +29,14 @@ from pathlib import Path
 
 OKX_REST = "https://www.okx.com"
 
+# Markout horizons (minutes). Markout = basis drift after a fill, signed so
+# positive = favorable. This is how market makers measure adverse selection;
+# here it detects entering/exiting the basis position exactly when the basis
+# is about to move against the book — toxicity that episode-level P&L hides.
+MARKOUT_HORIZONS_MIN = (1, 5, 15, 60)
+_MARKOUT_SETTLE_MS = (MARKOUT_HORIZONS_MIN[-1] + 2) * 60_000
+_MARKOUT_MAX_TRIES = 20  # give up on a fill's markouts after this many failed fetches
+
 
 def _ssl_context() -> ssl.SSLContext:
     try:
@@ -66,6 +74,14 @@ class OKXPublic:
         data = _get_json(f"/api/v5/market/ticker?instId={inst}")
         return data["data"][0]
 
+    def candles_1m(self, inst: str, after_ms: int, limit: int = 100) -> list[list[str]]:
+        """1m candles strictly older than after_ms, newest first (OKX 'after'
+        is a pagination cursor, not a range start)."""
+        data = _get_json(
+            f"/api/v5/market/history-candles?instId={inst}&bar=1m&after={after_ms}&limit={limit}"
+        )
+        return data.get("data", [])
+
 
 class PaperFundingEngine:
     def __init__(self, params: PaperParams, state_path: Path, api: OKXPublic | None = None):
@@ -75,9 +91,7 @@ class PaperFundingEngine:
         self.state = self._load()
 
     def _load(self) -> dict:
-        if self.state_path.exists():
-            return json.loads(self.state_path.read_text())
-        return {
+        defaults = {
             "on": False,
             "equity": 0.0,  # cumulative return, fraction of capital
             "entry_time": None,
@@ -86,11 +100,84 @@ class PaperFundingEngine:
             "last_funding_ts": 0,
             "episodes": [],
             "log": [],
+            "pending_fills": [],  # fills awaiting markout computation
+            "markouts": [],       # completed markout records (diagnostic only)
         }
+        if self.state_path.exists():
+            state = json.loads(self.state_path.read_text())
+            for key, value in defaults.items():
+                state.setdefault(key, value)
+            return state
+        return defaults
 
     def _save(self) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state_path.write_text(json.dumps(self.state, indent=1))
+
+    @property
+    def spot_inst(self) -> str:
+        return self.p.perp_inst.removesuffix("-SWAP")
+
+    def _basis_now(self) -> float | None:
+        """Perp-vs-spot basis at the ticker mids, as a fraction. None on any
+        fetch failure — markouts are diagnostics and must never break a tick."""
+        try:
+            perp = self.api.ticker(self.p.perp_inst)
+            spot = self.api.ticker(self.spot_inst)
+            perp_mid = (float(perp["bidPx"]) + float(perp["askPx"])) / 2
+            spot_mid = (float(spot["bidPx"]) + float(spot["askPx"])) / 2
+            return perp_mid / spot_mid - 1
+        except Exception:
+            return None
+
+    def _record_fill(self, ts_ms: int, kind: str) -> None:
+        basis = self._basis_now()
+        if basis is None:
+            return  # no baseline captured: this fill simply has no markouts
+        self.state["pending_fills"].append({"ts": ts_ms, "kind": kind, "basis": basis, "tries": 0})
+
+    def _markouts_for(self, fill: dict) -> dict:
+        after = fill["ts"] + MARKOUT_HORIZONS_MIN[-1] * 60_000 + 120_000
+        perp = {int(c[0]): float(c[4]) for c in self.api.candles_1m(self.p.perp_inst, after)}
+        spot = {int(c[0]): float(c[4]) for c in self.api.candles_1m(self.spot_inst, after)}
+        # enter sells the perp leg: a falling basis afterwards is favorable.
+        # exit buys it back: a rising basis afterwards is favorable.
+        direction = -1.0 if fill["kind"] == "enter" else 1.0
+        out: dict = {}
+        for m in MARKOUT_HORIZONS_MIN:
+            minute = (fill["ts"] + m * 60_000) // 60_000 * 60_000
+            if minute not in perp or minute not in spot:
+                out[f"m{m}"] = None
+                continue
+            basis_h = perp[minute] / spot[minute] - 1
+            out[f"m{m}"] = round(direction * (basis_h - fill["basis"]) * 1e4, 4)
+        if all(v is None for v in out.values()):
+            raise RuntimeError("no overlapping 1m candles for markout window")
+        return out
+
+    def _process_markouts(self, now_ms: int) -> None:
+        """Resolve markouts for fills whose longest horizon has elapsed.
+        Failures are retried on later ticks up to _MARKOUT_MAX_TRIES.
+        Diagnostic only — never touches equity or the promotion gate."""
+        ready = [f for f in self.state["pending_fills"] if now_ms >= f["ts"] + _MARKOUT_SETTLE_MS]
+        for fill in ready:
+            try:
+                marks = self._markouts_for(fill)
+            except Exception:
+                fill["tries"] = fill.get("tries", 0) + 1
+                if fill["tries"] >= _MARKOUT_MAX_TRIES:
+                    self.state["pending_fills"].remove(fill)
+                continue
+            self.state["pending_fills"].remove(fill)
+            self.state["markouts"].append(
+                {
+                    "ts": fill["ts"],
+                    "kind": fill["kind"],
+                    "basis_bps": round(fill["basis"] * 1e4, 4),
+                    **marks,
+                }
+            )
+            self.state["markouts"] = self.state["markouts"][-500:]
 
     def _spread_cost(self) -> float:
         """Observed half-spread on the perp leg (fraction of price), doubled
@@ -141,6 +228,7 @@ class PaperFundingEngine:
                 last_funding_ts=newest_ts,
             )
             self.state["equity"] -= cost
+            self._record_fill(now_ms, "enter")
             action = f"ENTER (smooth={smooth * 1e4:.2f}bps, cost={cost * 1e4:.1f}bps)"
         elif self.state["on"] and smooth < self.p.exit_bps / 1e4:
             cost = fee_half + self._spread_cost()
@@ -159,7 +247,10 @@ class PaperFundingEngine:
                 }
             )
             self.state.update(on=False, entry_time=None, episode_gross=0.0, episode_costs=0.0)
+            self._record_fill(now_ms, "exit")
             action = f"EXIT (smooth={smooth * 1e4:.2f}bps, cost={cost * 1e4:.1f}bps)"
+
+        self._process_markouts(now_ms)
 
         entry = {
             "ts": now_ms,

@@ -38,6 +38,7 @@ def main() -> int:
         return 1
 
     nets: list[float] = []
+    marks: list[dict] = []
     now_ms = time.time() * 1000
     for path in states:
         s = json.loads(path.read_text())
@@ -45,6 +46,7 @@ def main() -> int:
         eps = s.get("episodes", [])
         inst_nets = [e["net"] for e in eps if "net" in e]
         nets.extend(inst_nets)
+        marks.extend(s.get("markouts", []))
         open_note = ""
         if s.get("on"):
             age_h = (now_ms - (s.get("entry_time") or now_ms)) / 3.6e6
@@ -53,6 +55,23 @@ def main() -> int:
         mean_str = f"{(sum(inst_nets) / len(inst_nets)) * 1e4:+.1f}" if inst_nets else "n/a"
         print(f"{inst}: {len(eps)} episodes, mean net {mean_str} bps, "
               f"equity {s.get('equity', 0.0) * 1e4:+.2f} bps{open_note}")
+
+    # markouts: basis drift after each fill, + = favorable. Diagnostic only
+    # (never gates promotion); persistently negative means fills are being
+    # adversely selected and the entry timing needs a look before the episode
+    # economics can be trusted.
+    if marks:
+        parts = []
+        for m in (1, 5, 15, 60):
+            vals = [mk[f"m{m}"] for mk in marks if mk.get(f"m{m}") is not None]
+            if vals:
+                parts.append(f"+{m}m {sum(vals) / len(vals):+.2f}")
+        if parts:
+            print(f"markouts ({len(marks)} fills, bps, + = favorable): " + " | ".join(parts))
+        m15 = [mk["m15"] for mk in marks if mk.get("m15") is not None]
+        if len(m15) >= 5 and sum(m15) / len(m15) < 0:
+            print("  note: mean 15m markout is negative — fills are adversely "
+                  "selected; investigate entry timing.")
 
     n = len(nets)
     print("-" * 60)
