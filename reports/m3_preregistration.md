@@ -32,6 +32,13 @@ message-rate statistics. NOT permitted outside a round: any analysis that
 estimates predictability (basis autocorrelation, imbalance→return
 regressions, and the like).
 
+AMENDMENT 2026-07-07 (ops only, no gate touched): the fixed 2h cron slot
+proved fragile against laptop sleep (skipped slots + suspended runs observed
+same day). Replaced by a 15-minute supervisor (`scripts/ensure_recorder.sh`)
+that restarts a self-terminating run whenever none is alive, bounding
+post-wake recovery at 15 minutes. Coverage accounting in the C5 data floor
+is unchanged and will reflect whatever gaps sleep still causes.
+
 ## Common cost model (all families)
 
 Taker legs at 25bp round trip for the 4-leg perp+spot pair (identical to the
