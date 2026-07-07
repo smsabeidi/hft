@@ -108,6 +108,22 @@ def test_oos_equity_is_chained_across_windows():
     assert res.oos_equity["time"].is_monotonic_increasing
 
 
+def test_strategy_gate_requires_statistical_significance():
+    """The gate must reject small lucky samples: 51 trades at t~1 'passed' on
+    pure noise before min_trades/min_tstat existed (synthetic-check finding)."""
+    from hft.backtest.metrics import Metrics
+    from hft.backtest.walkforward import WalkForwardResult
+
+    def result(n, exp, t):
+        m = Metrics(n_trades=n, expectancy_usd=exp, t_stat=t)
+        return WalkForwardResult([], pd.DataFrame(), pd.DataFrame(), m, stability=1.0)
+
+    assert not result(51, 20.85, 1.0).passed()   # the lucky-noise case
+    assert not result(200, 5.0, 1.2).passed()    # enough trades, weak t
+    assert not result(80, 10.0, 3.0).passed()    # strong t, small sample
+    assert result(150, 8.0, 2.5).passed()        # real evidence shape
+
+
 def test_insufficient_data_raises():
     bars = make_bars(100)
     with pytest.raises(ValueError, match="not enough bars"):

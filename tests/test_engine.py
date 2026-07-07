@@ -44,7 +44,7 @@ class BuyThenCloseAt:
         if ctx.i == self.buy_bar and ctx.position is None:
             ctx.buy(self.sl, self.tp)
         elif ctx.i == self.close_bar and ctx.position is not None:
-            ctx.close()
+            ctx.close_position()
 
 
 def test_no_lookahead_fill_at_next_bar_open():

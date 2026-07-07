@@ -29,9 +29,12 @@ tests/           55 tests; the pre-commit hook runs them (fast, ~6s)
 
 1. **Harness gate** — `python3 scripts/run_falsification.py` must PASS
    (naive strategy loses decisively). Runs in CI-of-one via pre-commit tests.
-2. **Strategy gate** — positive after-cost expectancy on 5+ years of ticks AND
-   a passing walk-forward round: `scripts/run_walkforward.py`. A family dies
-   after 2 failed rounds (rounds auto-logged to `reports/rounds.log`).
+2. **Strategy gate** — a passing walk-forward round on 5+ years of ticks:
+   positive after-cost OOS expectancy with >=100 OOS trades, t-stat >= 2.0,
+   and >=60% window stability (`scripts/run_walkforward.py`). The statistical
+   requirements exist because `scripts/run_synthetic_check.py` proved a lucky
+   51-trade sample can look profitable on pure noise. A family dies after 2
+   failed rounds (auto-logged to `reports/rounds.log`).
 3. **Parity gate** — Python vs MT5 Strategy Tester, trade-by-trade, identical
    tick data. See `mql5/README.md`.
 4. **Demo gate** — ≥100 demo trades, zero risk-engine violations, slippage

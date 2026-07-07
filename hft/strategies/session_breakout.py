@@ -53,7 +53,6 @@ class SessionBreakout(BaseStrategy):
 
     def on_bar(self, ctx: Context) -> None:
         t = ctx.time
-        bar = ctx.bar
         if self._day != t.date():
             self._day = t.date()
             self._hi, self._lo = None, None
@@ -61,13 +60,13 @@ class SessionBreakout(BaseStrategy):
 
         hour = t.hour
         if self.asian_start_hour <= hour < self.asian_end_hour:
-            self._hi = bar["high"] if self._hi is None else max(self._hi, bar["high"])
-            self._lo = bar["low"] if self._lo is None else min(self._lo, bar["low"])
+            self._hi = ctx.high if self._hi is None else max(self._hi, ctx.high)
+            self._lo = ctx.low if self._lo is None else min(self._lo, ctx.low)
             return
 
         # time-stop
         if ctx.position is not None and hour >= self.session_end_hour:
-            ctx.close()
+            ctx.close_position()
             return
 
         if (
@@ -85,9 +84,9 @@ class SessionBreakout(BaseStrategy):
 
         sl_pips = min(max(range_pips, self.min_sl_pips), self.max_sl_pips)
         tp_pips = self.k_tp * range_pips
-        if bar["close"] > self._hi:
+        if ctx.close > self._hi:
             ctx.buy(sl_pips, tp_pips)
             self._traded_today = True
-        elif bar["close"] < self._lo:
+        elif ctx.close < self._lo:
             ctx.sell(sl_pips, tp_pips)
             self._traded_today = True

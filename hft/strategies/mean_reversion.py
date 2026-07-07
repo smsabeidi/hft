@@ -45,10 +45,9 @@ class MeanReversion(BaseStrategy):
         self.trade_end_hour = trade_end_hour
 
     def _z(self, ctx: Context) -> float | None:
-        h = ctx.history(self.window)
-        if len(h) < self.window:
+        closes = ctx.closes(self.window)
+        if len(closes) < self.window:
             return None
-        closes = h["close"].to_numpy()
         mu = closes.mean()
         sd = closes.std(ddof=1)
         if sd == 0 or not np.isfinite(sd):
@@ -62,7 +61,7 @@ class MeanReversion(BaseStrategy):
 
         if ctx.position is not None:
             if abs(z) < self.z_out:
-                ctx.close()
+                ctx.close_position()
             return
 
         hour = ctx.time.hour

@@ -1,0 +1,21 @@
+# CI: fast suite + falsification gate on every push.
+# Activates automatically if/when this repo gets a GitHub remote.
+name: harness
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas pyarrow scipy pytest
+      - name: unit tests
+        run: python -m pytest -q
+      - name: falsification gate (the harness must be able to lose)
+        run: python scripts/run_falsification.py

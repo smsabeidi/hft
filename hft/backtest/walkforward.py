@@ -43,10 +43,20 @@ class WalkForwardResult:
     oos_metrics: Metrics
     stability: float  # fraction of ALL test windows with positive expectancy
 
-    def passed(self, min_stability: float = 0.6) -> bool:
+    def passed(
+        self,
+        min_stability: float = 0.6,
+        min_trades: int = 100,
+        min_tstat: float = 2.0,
+    ) -> bool:
+        """The strategy gate. Statistical defenses are not optional: without
+        the sample-size and t-stat requirements, a random walk passes this
+        gate roughly 1 seed in 4 (found by scripts/run_synthetic_check.py —
+        51 lucky trades at t~1 'passed' on pure noise before these existed)."""
         return (
-            self.oos_metrics.n_trades > 0
+            self.oos_metrics.n_trades >= min_trades
             and self.oos_metrics.expectancy_usd > 0
+            and self.oos_metrics.t_stat >= min_tstat
             and self.stability >= min_stability
         )
 
@@ -55,7 +65,8 @@ class WalkForwardResult:
         return (
             f"walk-forward: {len(self.windows)} windows, "
             f"stability {self.stability:.0%}, OOS expectancy "
-            f"${self.oos_metrics.expectancy_usd:.2f} over {self.oos_metrics.n_trades} trades -> {status}"
+            f"${self.oos_metrics.expectancy_usd:.2f} (t={self.oos_metrics.t_stat:.2f}) "
+            f"over {self.oos_metrics.n_trades} trades -> {status}"
         )
 
 
