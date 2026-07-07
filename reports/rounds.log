@@ -4,3 +4,4 @@
 2026-07-07T02:03:18.791235+00:00 family=mean_reversion range=2021-01-03..2026-06-26 scheme=500/120 costs=0.25sp/0.1sl oos_exp=-11.40 t=-3.69 trades=2655 stability=0.00 result=FAIL
 2026-07-07T02:05:50.790729+00:00 family=session_breakout range=2021-01-03..2026-06-26 scheme=500/120 costs=0.0001sp/0.0sl oos_exp=-25.83 t=-2.20 trades=588 stability=0.29 result=FAIL
 2026-07-07T02:28:58.575680+00:00 family=tsmom_pooled range=2021-01..2026-06 scheme=500/120 costs=0.7sp/0.2sl oos_exp=-40.04 t=-4.48 trades=302 stability=0.14 result=FAIL
+2026-07-07T02:45:11.327877+00:00 family=funding_capture_pooled range=2021-01..2026-06 scheme=2190/548x8h costs=25bpRT/0.6util mean_ep_net_bps=74.2 t=3.50 episodes=31 stability=1.00 result=PASS

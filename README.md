@@ -105,6 +105,21 @@ the funding-capture opportunity from 5.5 years of public funding history —
 2021, ~1% in 2026 H1). The first positive expected-return number in the
 project, honestly caveated.
 
+**FORK DECIDED (founder, 2026-07-07): crypto now, forex on hold** pending
+Dukascopy tick data.
+
+**FIRST GATE PASS — crypto round 1, conditional funding capture
+(`scripts/run_funding_round.py`, `hft/crypto/funding_capture.py`):**
+31 pooled OOS episodes across BTC+ETH, mean +74.2 bps/episode
+(95% CI [+30.9, +117.5], t=3.50), 100% window stability, stable frozen
+params (enter 0.5bp smoothed, 9-interval smoothing). Mean OOS annualized
+net ≈ 3.8%/yr at conservative costs (25 bps RT fees, 60% utilization, no
+basis tailwind modeled). Honest size: a bond-like carry, not a rocket — its
+strategic value is as base yield plus the forcing function for exchange-native
+execution. Next gates for this family: paper implementation against a live
+venue (phase-3 recorder/executor on a VM), episode-count growth, then small
+real capital — all requiring the founder's venue/jurisdiction decisions.
+
 Registered hypotheses for FUTURE tick-data rounds (pre-registered here so
 nobody pretends they weren't born from peeking at the above):
 1. Breakout-FADE: the zero-cost negative expectancy of breakout suggests the
