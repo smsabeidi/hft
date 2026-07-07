@@ -56,6 +56,12 @@ bounded by perp open interest — roughly $10-50M notional before self-impact
 becomes measurable, far above any near-term book here.
 
 **M4 — Forex track revival (owner: founder; parked, not dead).**
+2026-07-07 addendum: the revival family is pre-registered blind —
+fx_carry_vol_filtered, reports/c7_preregistration.md (the one institutional
+FX strategy an MT5 prop EA can express; daily horizon, FTMO Swing target,
+retail swap markup pinned as the gating scenario). Rate data fetched.
+Running it is a one-word founder decision since it reopens this fork; the
+tick-data requirement stays for any faster-than-daily family.
 Requires: Dukascopy ticks from an unthrottled network (definitive spreads),
 Windows VPS (compile the EA, run the parity gate), FTMO rulebook pinned. The
 prop-firm funded account is the only 20-80x capital lever available without
