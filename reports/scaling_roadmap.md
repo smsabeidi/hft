@@ -62,6 +62,15 @@ FX strategy an MT5 prop EA can express; daily horizon, FTMO Swing target,
 retail swap markup pinned as the gating scenario). Rate data fetched.
 Running it is a one-word founder decision since it reopens this fork; the
 tick-data requirement stays for any faster-than-daily family.
+2026-07-07 (late) addendum: fx_carry is DEAD, 2 of 2 — round 1 (per-pair
+threshold) and round 2 (7-currency cross-sectional basket, the literature's
+canonical form: right sign at +2.6%/yr, 71% window stability, t=0.54, with
+the retail swap markup visibly consuming most of the premium). With this,
+the DIRECTIONAL research program on bar data is COMPLETE: every family
+decided, all logged. M4's revival now depends strictly on the original
+letter of this rung — tick-data microstructure families after the VPS +
+Dukascopy items — or on the funded-account question being answered by the
+crypto track's record instead.
 Requires: Dukascopy ticks from an unthrottled network (definitive spreads),
 Windows VPS (compile the EA, run the parity gate), FTMO rulebook pinned. The
 prop-firm funded account is the only 20-80x capital lever available without

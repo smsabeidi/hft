@@ -24,6 +24,31 @@ dated amendment here, materially different and still a-priori (candidate
 directions: cross-sectional carry basket long-highest/short-lowest across
 a wider pair set; forward-points-based signal instead of 3m proxies).
 
+AMENDMENT 2026-07-07 (round 2 spec, frozen BEFORE any cross-sectional
+analysis; founder direction "PhD research + optimize" spends the family's
+last round): fx_carry_xs — CROSS-SECTIONAL carry, the literature's
+canonical form (Lustig-Verdelhan portfolios; Koijen et al. carry), a
+materially different hypothesis from round 1's per-pair threshold.
+
+- Universe: 7 currencies vs USD — EUR, GBP, AUD, NZD (XXXUSD quotes) and
+  JPY, CAD, CHF (USDXXX quotes; long-currency return = -dln(pair)). A
+  currency without rate data in a period drops out of that period's
+  ranking; fewer than 2k rankable currencies = flat.
+- Signal (causal): 3m differential vs USD, latest published, shifted one
+  day. Rebalance WEEKLY at the Friday 22:00 UTC close; weights apply from
+  the next trading day.
+- Portfolio: long top-k, short bottom-k. Grid, frozen: k in {1, 2};
+  weighting in {equal, inverse-60d-vol normalized per side}. 4 combos.
+- Accruals: daily carry = sum(w_i x d_i)/252 minus retail swap markup
+  m x gross/252, m in {0.5, 1.0, 1.5}%/yr — GATE AT m = 1.0. Price P&L =
+  sum(w_i x ccy_return_i). Turnover cost 1.7bp of notional round-trip
+  (0.85bp/side) charged on sum|dw| at each rebalance, flat across pairs.
+- Walk-forward: train 500 trading days / test 120, rolled 120; optimize
+  the 4-combo grid by after-cost net at m=1.0 on train.
+- GATE: pooled OOS WEEKLY portfolio returns >= 100 observations, mean > 0,
+  t >= 2.0, window stability >= 0.6. THIS ROUND DECIDES THE FAMILY
+  (2 of 2); no round 3 exists.
+
 ## Frozen spec
 
 Universe: EURUSD, GBPUSD, AUDUSD daily bars (aggregated from the histdata

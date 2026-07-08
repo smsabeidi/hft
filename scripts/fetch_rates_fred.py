@@ -26,7 +26,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 
 OUT = Path(__file__).resolve().parents[1] / "data" / "rates"
-SERIES = {"USD": "DTB3", "EUR": "ECBDFR", "GBP": "IR3TIB01GBM156N", "AUD": "IR3TIB01AUM156N"}
+SERIES = {
+    "USD": "DTB3", "EUR": "ECBDFR",
+    "GBP": "IR3TIB01GBM156N", "AUD": "IR3TIB01AUM156N",
+    "JPY": "IR3TIB01JPM156N", "CHF": "IR3TIB01CHM156N",
+    "CAD": "IR3TIB01CAM156N", "NZD": "IR3TIB01NZM156N",
+}
 FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv?id="
 
 
