@@ -33,6 +33,24 @@ $1-5k on validated edge.
 6. Decision only: carry round 2 (cross-sectional basket spec; low prior) —
    "run it" or bank the round.
 
+## Demo rehearsal phase (founder sequencing, 2026-07-09)
+
+Sequence: prove ops on the free 100k demo -> then consider the paid
+50k/100k evaluation. The rehearsal runs SessionBreakout on the 100k demo
+(attach recipe inside scripts/demo_rehearsal_status.py; requires the Mac
+awake or the MT5 VPS during 07:00-12:00 UTC). Self-assessing gate:
+`python3 scripts/demo_rehearsal_status.py` — ops gate at >=10 round trips
+across >=10 days with the one-trade-per-day discipline unbroken. P&L is
+explicitly non-evidential (strategy refuted; this phase validates fills,
+sizing, stops, logging, alerts, uptime).
+
+PAID 50k/100k PURCHASE GATE — both conditions, pre-committed:
+  A. demo ops gate MET (script above prints it), AND
+  B. a validated strategy in SignalHost's slot (gauntlet + parity PASS —
+     pipeline: C5 at VM+30 days, C6 at VM+L2, or a future tick-data family).
+Buying the big account on A alone purchases a dashboard; on A+B it
+purchases leverage for measured edge — the only version worth $500+.
+
 ## Needs nothing
 
 M0 paper episodes (accruing every 8h), daily journal (cron), recorder

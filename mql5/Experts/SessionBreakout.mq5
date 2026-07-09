@@ -58,6 +58,10 @@ input double InpMaxRangePips     = 40.0;
 
 input long   InpMagic            = 20260706;
 input string InpParityLog        = "parity_session_breakout.csv";
+// tester and live deals must never share a ledger: the tester stacks
+// overlapping runs of the same dates, which poisons any live-ops audit
+// (discovered 2026-07-09: 882 tester trades masquerading as rehearsal data)
+string ParityFile() { return (MQLInfoInteger(MQL_TESTER) ? "tester_" : "live_") + InpParityLog; }
 
 CTrade      trade;
 CRiskEngine risk;
@@ -239,7 +243,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       return;
    if(HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagic)
       return;
-   const int fh = FileOpen(InpParityLog,
+   const int fh = FileOpen(ParityFile(),
                            FILE_READ | FILE_WRITE | FILE_CSV | FILE_COMMON, ',');
    if(fh == INVALID_HANDLE)
       return;
@@ -299,9 +303,9 @@ void MarkTradedToday(const string msg)
 
 void ParityLogHeader()
   {
-   if(FileIsExist(InpParityLog, FILE_COMMON))
+   if(FileIsExist(ParityFile(), FILE_COMMON))
       return;
-   const int fh = FileOpen(InpParityLog, FILE_WRITE | FILE_CSV | FILE_COMMON, ',');
+   const int fh = FileOpen(ParityFile(), FILE_WRITE | FILE_CSV | FILE_COMMON, ',');
    if(fh == INVALID_HANDLE)
       return;
    FileWrite(fh, "time", "symbol", "deal_type", "lots", "price",
