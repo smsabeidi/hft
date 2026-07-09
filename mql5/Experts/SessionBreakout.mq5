@@ -34,14 +34,16 @@
 #include <RiskEngine.mqh>
 #include <FirmConfig.mqh>   // for EABannedHere() — the prop-firm EA-policy guard
 
-//--- firm config (frozen at deploy; NEVER optimized — design doc, Compliance)
-input double InpInitialBalance   = 50000.0; // evaluation starting balance
-input double InpDailyLossFrac    = 0.05;    // firm daily loss limit
-input double InpTotalDDFrac      = 0.10;    // firm total drawdown limit
-input double InpRiskPerTrade     = 0.005;   // own policy: risk per trade
-input double InpSafetyFactor     = 2.0;     // own policy: headroom safety
-input double InpMaxLots          = 5.0;     // firm max lots
-input bool   InpRulesVerified    = false;   // set true ONLY after pinning the firm rulebook
+//--- firm config: defaults INHERIT the pinned FirmConfig.mqh (single source
+//--- of truth, generated from config/*.json). Overridable per attach, but
+//--- the pinned config drives them so a verified rulebook flows through.
+input double InpInitialBalance   = FIRM_ACCOUNT_TIER_USD; // pinned initial balance
+input double InpDailyLossFrac    = FIRM_DAILY_LOSS_FRAC;  // pinned daily loss limit
+input double InpTotalDDFrac      = FIRM_TOTAL_DD_FRAC;    // pinned total drawdown
+input double InpRiskPerTrade     = OWN_RISK_PER_TRADE;    // own policy: risk per trade
+input double InpSafetyFactor     = OWN_SAFETY_FACTOR;     // own policy: headroom safety
+input double InpMaxLots          = FIRM_MAX_LOTS;         // pinned max lots
+input bool   InpRulesVerified    = FIRM_RULES_VERIFIED;   // inherits pinned verified state
 
 //--- clock (see header). Auto mode measures TimeCurrent()-TimeGMT() at init.
 input bool   InpServerUTCOffsetAuto    = true;
