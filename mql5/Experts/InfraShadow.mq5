@@ -29,6 +29,9 @@ string      g_csv;
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   if(EABannedHere())   // even a non-trading EA attached to an EA-banned
+      return(INIT_FAILED);  // firm account can trip restrictions — refuse
+
    const double bal = AccountInfoDouble(ACCOUNT_BALANCE);
    if(!g_risk.Init(bal, FIRM_DAILY_LOSS_FRAC, FIRM_TOTAL_DD_FRAC,
                    OWN_RISK_PER_TRADE, OWN_SAFETY_FACTOR, FIRM_MAX_LOTS,

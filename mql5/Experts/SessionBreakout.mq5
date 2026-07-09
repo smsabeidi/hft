@@ -32,6 +32,7 @@
 
 #include <Trade\Trade.mqh>
 #include <RiskEngine.mqh>
+#include <FirmConfig.mqh>   // for EABannedHere() — the prop-firm EA-policy guard
 
 //--- firm config (frozen at deploy; NEVER optimized — design doc, Compliance)
 input double InpInitialBalance   = 50000.0; // evaluation starting balance
@@ -90,6 +91,9 @@ int OnInit()
          return(INIT_FAILED);
         }
      }
+
+   if(EABannedHere())
+      return(INIT_FAILED);
 
    g_pip = (_Digits == 5 || _Digits == 3) ? 10.0 * _Point : _Point;
    if(_Symbol != "EURUSD")

@@ -54,10 +54,12 @@ int OnInit()
   {
    if(!FIRM_RULES_VERIFIED && !MQLInfoInteger(MQL_TESTER))
      {
-      Alert("SignalHost: firm rules unverified (config/ftmo_50k.json). ",
-            "Pin the rulebook, regenerate FirmConfig.mqh, redeploy.");
+      Alert("SignalHost: firm rules unverified. Pin the rulebook, ",
+            "regenerate FirmConfig.mqh, redeploy.");
       return(INIT_FAILED);
      }
+   if(EABannedHere())
+      return(INIT_FAILED);
    g_pip = (_Digits == 5 || _Digits == 3) ? 10.0 * _Point : _Point;
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetDeviationInPoints(20);

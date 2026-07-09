@@ -1,0 +1,35 @@
+{
+  "_comment": "FundedNext Free Trial 100K (login 34424190, MT5 Swap, FundedNext-Server3). Rules VERIFIED 2026-07-09 by a 4-pass research workflow with conservative reconciliation; see reports/ commit for provenance. Risk numbers are real. EA policy: NOT permitted on the Free Trial by default (ea_permitted=false) — the guard blocks the bot from trading on any FundedNext server. Re-verify EA policy and daily-loss basis in-dashboard before ever flipping ea_permitted true (would require the paid EA add-on).",
+  "verified": true,
+  "firm": "FundedNext",
+  "account_tier_usd": 100000,
+  "account_type": "Free Trial 100K (Swap) — mirrors Stellar single-phase",
+  "daily_loss_frac": 0.05,
+  "total_drawdown_frac": 0.10,
+  "drawdown_mode": "static_initial_balance",
+  "total_dd_floor_usd": 90000,
+  "daily_anchor": "max_of_balance_equity_at_server_rollover (conservative: floors early, floating losses counted)",
+  "rollover_timezone": "00:00 server time = GMT+3 in July DST, reverts to GMT+2 in winter; engine uses server-time day boundary so it tracks the shift automatically",
+  "profit_target_frac": 0.05,
+  "profit_target_enforced": false,
+  "min_trading_days": 3,
+  "max_lots": 10.0,
+  "max_concurrent_positions_firm": 30,
+  "news_trading_restricted": false,
+  "weekend_holding_allowed": true,
+  "ea_allowed": "NOT permitted on Free Trial by default — paid EA add-on required to enable; breach if run without it",
+  "ea_permitted": false,
+  "prohibited_strategy_thresholds": {
+    "hft": "banned",
+    "quick_strike": ">=30% of profit from trades closed within 30s",
+    "gambling": "risk >3% of initial balance per trade",
+    "hyperactivity": ">200 trades/day or >2000 server messages/day (breach on 3rd occurrence)",
+    "settlement_window": "disproportionate profit 00:00-02:00 server time is voided"
+  },
+  "consistency_rule": "no percentage best-day rule on CFD/Free-Trial accounts (that is Futures-only); prohibited-strategy thresholds above DO apply",
+  "own_policy": {
+    "risk_per_trade_frac": 0.005,
+    "daily_headroom_safety_factor": 2.0,
+    "max_concurrent_positions": 1
+  }
+}

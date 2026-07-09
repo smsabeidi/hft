@@ -47,3 +47,30 @@ def test_repo_config_has_required_keys():
     )
     assert all(k in cfg for k in REQUIRED)
     assert cfg["verified"] is False  # flips true only when the founder pins the rulebook
+
+
+def test_ea_permitted_define_defaults_false_and_toggles():
+    assert "#define FIRM_EA_PERMITTED      false" in render(CFG, "x.json")  # default
+    permitted = dict(CFG, ea_permitted=True)
+    assert "#define FIRM_EA_PERMITTED      true" in render(permitted, "x.json")
+
+
+def test_ea_guard_and_include_guard_emitted():
+    out = render(CFG, "x.json")
+    assert "#ifndef FIRMCONFIG_MQH" in out and "#endif" in out
+    assert "bool EABannedHere()" in out
+    assert "ACCOUNT_SERVER" in out and "FIRM_EA_PERMITTED" in out
+
+
+def test_fundednext_config_is_verified_but_ea_banned():
+    cfg = json.loads(
+        (Path(__file__).resolve().parents[1] / "config" / "fundednext_100k.json").read_text()
+    )
+    assert all(k in cfg for k in REQUIRED)
+    assert cfg["verified"] is True                    # rules pinned from research
+    assert cfg["ea_permitted"] is False               # Free Trial bans EAs
+    assert cfg["account_tier_usd"] == 100000
+    assert cfg["daily_loss_frac"] == 0.05 and cfg["total_drawdown_frac"] == 0.10
+    out = render(cfg, "fundednext_100k.json")
+    assert "#define FIRM_EA_PERMITTED      false" in out
+    assert "#define FIRM_RULES_VERIFIED    true" in out

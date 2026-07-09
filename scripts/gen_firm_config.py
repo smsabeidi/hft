@@ -49,10 +49,13 @@ def render(cfg: dict, source_name: str) -> str:
 //| Regenerate: python3 scripts/gen_firm_config.py                    |
 //| Generated: {stamp}                                    |
 {banner}//+------------------------------------------------------------------+
+#ifndef FIRMCONFIG_MQH
+#define FIRMCONFIG_MQH
 #property strict
 
 #define FIRM_NAME              "{cfg["firm"]}"
 #define FIRM_RULES_VERIFIED    {"true" if verified else "false"}
+#define FIRM_EA_PERMITTED      {"true" if bool(cfg.get("ea_permitted", False)) else "false"}
 #define FIRM_ACCOUNT_TIER_USD  {float(cfg["account_tier_usd"]):.1f}
 #define FIRM_DAILY_LOSS_FRAC   {float(cfg["daily_loss_frac"]):.6f}
 #define FIRM_TOTAL_DD_FRAC     {float(cfg["total_drawdown_frac"]):.6f}
@@ -62,6 +65,23 @@ def render(cfg: dict, source_name: str) -> str:
 #define OWN_RISK_PER_TRADE     {float(own["risk_per_trade_frac"]):.6f}
 #define OWN_SAFETY_FACTOR      {float(own["daily_headroom_safety_factor"]):.2f}
 #define OWN_MAX_POSITIONS      {int(own["max_concurrent_positions"])}
+
+// EA-permission guard: refuse to run on THIS firm's own server when the
+// firm bans EAs for the account type (prevents an account-breach), while
+// leaving other brokers/demos untouched. Tester always allowed. Every EA
+// calls this in OnInit and returns INIT_FAILED when it is true.
+bool EABannedHere()
+  {{
+   if(MQLInfoInteger(MQL_TESTER) || FIRM_EA_PERMITTED)
+      return(false);
+   if(StringFind(AccountInfoString(ACCOUNT_SERVER), FIRM_NAME) < 0)
+      return(false);   // not this firm's server -> guard does not apply
+   Alert("EAs are NOT permitted on ", FIRM_NAME, " for this account "
+         "(config ea_permitted=false). Running here risks a rule breach — "
+         "remove the EA. Enable only via the firm's paid EA add-on.");
+   return(true);
+  }}
+#endif // FIRMCONFIG_MQH
 """
 
 
@@ -70,15 +90,16 @@ def main() -> int:
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = ap.parse_args()
 
-    cfg = json.loads(args.config.read_text())
+    config_path = args.config.resolve()
+    cfg = json.loads(config_path.read_text())
     missing = [k for k in REQUIRED if k not in cfg]
     if missing:
         print(f"config is missing required keys: {missing}")
         return 1
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(render(cfg, args.config.name))
-    print(f"wrote {OUT.relative_to(ROOT)} from {args.config.relative_to(ROOT)}")
+    OUT.write_text(render(cfg, config_path.name))
+    print(f"wrote {OUT.relative_to(ROOT)} from config/{config_path.name}")
     if not cfg["verified"]:
         print("WARNING: verified=false — placeholder numbers. EAs must refuse "
               "demo/live until the rulebook is pinned and verified flips true.")
