@@ -59,6 +59,7 @@ input double InpMinSlPips        = 8.0;
 input double InpMaxSlPips        = 30.0;
 input double InpMaxRangePips     = 40.0;
 
+input int    InpMaxSpreadPoints  = 12;      // entry spread gate (points); majors 12-16
 input long   InpMagic            = 20260706;
 input string InpParityLog        = "parity_session_breakout.csv";
 // tester and live deals must never share a ledger: the tester stacks
@@ -200,6 +201,11 @@ void OnTick()
 
    // never open new positions while disconnected (design doc policy)
    if(!TerminalInfoInteger(TERMINAL_CONNECTED))
+      return;
+
+   // spread gate (adopted 2026-07-09): refuse entries into rollover/news/
+   // thin-book spreads — the exact fills where session systems bleed
+   if(SymbolInfoInteger(_Symbol, SYMBOL_SPREAD) > InpMaxSpreadPoints)
       return;
 
    const double range_pips = (g_asian_hi - g_asian_lo) / g_pip;

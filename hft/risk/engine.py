@@ -58,12 +58,23 @@ class Violation:
     time: object = None
 
 
+# Equity-curve throttle tiers (anti-martingale): drawdown from PEAK equity
+# scales all NEW sizing down; open positions are never touched. Restores
+# automatically as equity recovers; full size only at a new equity high.
+# Adopted 2026-07-09 from the multi-strategy spec review — the mathematically
+# correct direction of dynamic lot adjustment (contract when out of sync,
+# expand only on demonstrated recovery).
+THROTTLE_TIERS = ((0.05, 1.00), (0.08, 0.60), (0.12, 0.35))  # (dd_below, multiplier)
+THROTTLE_FLOOR = 0.0  # dd >= 12%: full stand-down for new risk
+
+
 class RiskEngine:
     def __init__(self, config: FirmConfig, initial_balance: float, pip_value_per_lot: float = 10.0):
         self.cfg = config
         self.initial_balance = float(initial_balance)
         self.pip_value_per_lot = float(pip_value_per_lot)
         self.day_anchor = float(initial_balance)
+        self.peak_equity = float(initial_balance)
         self.halted = False
         self.violations: list[Violation] = []
 
@@ -81,8 +92,21 @@ class RiskEngine:
     def total_drawdown_floor(self) -> float:
         return self.initial_balance * (1.0 - self.cfg.total_drawdown_frac)
 
+    def throttle_multiplier(self, equity: float) -> float:
+        """Anti-martingale size multiplier from drawdown vs peak equity.
+        Also advances the peak (a new high resets the throttle to 1.0)."""
+        self.peak_equity = max(self.peak_equity, float(equity))
+        if self.peak_equity <= 0:
+            return THROTTLE_FLOOR
+        dd = (self.peak_equity - equity) / self.peak_equity
+        for dd_below, mult in THROTTLE_TIERS:
+            if dd < dd_below:
+                return mult
+        return THROTTLE_FLOOR
+
     def on_mark(self, equity: float, time=None) -> bool:
         """Mark-to-market check. Returns True if a breach happened (engine halts)."""
+        self.peak_equity = max(self.peak_equity, float(equity))
         if self.halted:
             return False
         if equity <= self.daily_loss_floor:
@@ -106,7 +130,10 @@ class RiskEngine:
         # configs before the rulebook is pinned.
         if self.halted or stop_pips <= 0:
             return 0.0
-        risk_usd = self.cfg.risk_per_trade_frac * equity
+        throttle = self.throttle_multiplier(equity)
+        if throttle <= 0.0:
+            return 0.0  # >=12% drawdown from peak: stand down for new risk
+        risk_usd = self.cfg.risk_per_trade_frac * equity * throttle
         lots = risk_usd / (stop_pips * self.pip_value_per_lot)
 
         headroom_daily = equity - self.daily_loss_floor

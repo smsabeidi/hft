@@ -86,3 +86,57 @@ def test_sizing_lot_rounding():
     # tiny equity -> below min lot -> 0
     r3 = RiskEngine(r.cfg, initial_balance=100.0)
     assert r3.allowed_lots(10.0, 100.0) == 0.0
+
+
+# --- equity-curve throttle (anti-martingale), adopted 2026-07-09 ------------
+
+def test_throttle_full_size_below_5pct_dd():
+    r = _engine()
+    assert r.throttle_multiplier(50_000.0) == 1.00
+    assert r.throttle_multiplier(48_000.0) == 1.00   # 4% dd
+
+
+def test_throttle_tiers_and_standdown():
+    r = _engine()
+    r.on_mark(50_000.0)                              # establish peak
+    assert r.throttle_multiplier(47_000.0) == 0.60   # 6% dd
+    assert r.throttle_multiplier(45_500.0) == 0.35   # 9% dd
+    assert r.throttle_multiplier(43_900.0) == 0.00   # 12.2% dd -> stand down
+    # NOTE: dd >= 12% only occurs pre-breach here because this config's
+    # total-drawdown floor (10%) would normally halt first; the tier exists
+    # for firms/configs with wider total limits.
+
+
+def test_throttle_scales_allowed_lots():
+    r = _engine()
+    full = r.allowed_lots(10.0, 50_000.0)
+    r.peak_equity = 50_000.0
+    # roll the day so daily headroom exists at the drawn-down equity —
+    # otherwise the (correct) headroom block fires before the throttle
+    r.on_day_start(balance=47_000.0, equity=47_000.0)
+    throttled = r.allowed_lots(10.0, 47_000.0)       # 6% dd from peak -> 0.60x
+    assert throttled == pytest.approx(0.60 * full * (47_000.0 / 50_000.0), abs=0.02)
+
+
+def test_headroom_block_precedes_throttle_intraday():
+    """At 6% intraday drawdown under a 5% daily limit, the daily-headroom
+    block (not the throttle) is what stops new risk — layered defense."""
+    r = _engine()
+    r.on_mark(50_000.0)
+    assert r.allowed_lots(10.0, 47_000.0) == 0.0
+
+
+def test_throttle_restores_at_new_high():
+    r = _engine()
+    r.on_mark(50_000.0)
+    assert r.throttle_multiplier(47_000.0) == 0.60
+    assert r.throttle_multiplier(50_500.0) == 1.00   # new high advances peak
+    assert r.peak_equity == pytest.approx(50_500.0)
+    assert r.throttle_multiplier(49_000.0) == 1.00   # 2.97% dd from new peak
+
+
+def test_peak_never_decreases():
+    r = _engine()
+    r.on_mark(52_000.0)
+    r.on_mark(48_000.0)
+    assert r.peak_equity == pytest.approx(52_000.0)

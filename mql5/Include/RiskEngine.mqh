@@ -34,6 +34,7 @@ private:
    double            m_safety_factor;
    double            m_max_lots;
    bool              m_halted;
+   double            m_peak;           // peak equity (throttle reference)
    datetime          m_day_start;      // start of current server day
    string            m_gv;             // GlobalVariable name prefix
 
@@ -44,6 +45,7 @@ private:
       GlobalVariableSet(m_gv + "_anchor", m_day_anchor);
       GlobalVariableSet(m_gv + "_day", (double)m_day_start);
       GlobalVariableSet(m_gv + "_halted", m_halted ? 1.0 : 0.0);
+      GlobalVariableSet(m_gv + "_peak", m_peak);
      }
 
 public:
@@ -68,6 +70,12 @@ public:
       // a halt is PERMANENT: restore it regardless of what day it is
       m_halted = GlobalVariableCheck(m_gv + "_halted") &&
                  GlobalVariableGet(m_gv + "_halted") > 0.5;
+
+      // peak equity is lifetime-scoped (like the halt): restore unconditionally
+      // so a restart can never reset the throttle to a more permissive state
+      m_peak = GlobalVariableCheck(m_gv + "_peak")
+               ? MathMax(GlobalVariableGet(m_gv + "_peak"), initial_balance)
+               : initial_balance;
 
       // the day anchor is day-scoped: restore only within the same server day
       if(GlobalVariableCheck(m_gv + "_day") &&
@@ -108,9 +116,32 @@ public:
       return(MarkEquity(AccountInfoDouble(ACCOUNT_EQUITY)));
      }
 
+   //--- anti-martingale equity-curve throttle (mirrors engine.py) ----------
+   //--- tiers: dd<5% -> 1.00 | <8% -> 0.60 | <12% -> 0.35 | >=12% -> 0.00
+   double            ThrottleMultiplier(const double equity)
+     {
+      if(equity > m_peak)
+        {
+         m_peak = equity;
+         Persist();
+        }
+      if(m_peak <= 0.0)
+         return(0.0);
+      const double dd = (m_peak - equity) / m_peak;
+      if(dd < 0.05) return(1.00);
+      if(dd < 0.08) return(0.60);
+      if(dd < 0.12) return(0.35);
+      return(0.00);
+     }
+
    //--- returns true when a breach just happened ---------------------------
    bool              MarkEquity(const double equity)
      {
+      if(equity > m_peak)
+        {
+         m_peak = equity;
+         Persist();
+        }
       if(m_halted)
          return(false);
       string kind = "";
@@ -138,7 +169,11 @@ public:
       if(m_halted || stop_pips <= 0.0 || pip_value_per_lot <= 0.0)
          return(0.0);
 
-      double lots = (m_risk_frac * equity) / (stop_pips * pip_value_per_lot);
+      const double throttle = ThrottleMultiplier(equity);
+      if(throttle <= 0.0)
+         return(0.0);   // >=12% drawdown from peak: stand down for new risk
+
+      double lots = (m_risk_frac * equity * throttle) / (stop_pips * pip_value_per_lot);
 
       const double headroom = MathMin(equity - DailyLossFloor(),
                                       equity - TotalDDFloor());
