@@ -33,6 +33,28 @@ strategy has passed the Python harness gauntlet.
   source of truth for firm limits; EAs written after 2026-07-07 include this
   and refuse demo/live while `FIRM_RULES_VERIFIED` is false.
 
+## Dollar.mq5 — the consolidated EA
+
+One file, one shared spine (FirmConfig risk limits, risk engine with breach
+halt + anti-martingale throttle, server-side stops, EA-permission guard,
+parity CSV, push alerts), four modes via `InpMode`:
+
+- `MODE_WATCH` (default, safe): trades nothing — telemetry + heartbeat +
+  alerts. Runs anywhere. Start here.
+- `MODE_SESSION`: London-open Asian-range breakout, 1 trade/day, full risk
+  sizing. The rehearsal strategy (refuted on 5.5y — ops-honest, not an edge).
+- `MODE_DEMO_HF`: high-cadence geometry demo (~86% win rate, NEGATIVE
+  expectancy printed at init). Demo/tester only, hard-guarded.
+- `MODE_SIGNAL`: the throne — routes a VALIDATED signal through full risk +
+  execution. Ships a NULL provider; trades nothing until a family passes the
+  gauntlet + parity gate. The only mode meant to make money on a funded
+  account, and it stays empty until earned.
+
+Dollar consolidates SessionBreakout/WinRate80/SignalHost/InfraShadow into
+one mode-switched vessel. It is not a validated money-maker (none exists for
+MT5 yet — rounds.log: 20 rounds, 1 PASS, and that PASS is a crypto spot+perp
+strategy MT5 cannot run). It is the fully-rigged vessel waiting for cargo.
+
 ## Running the EAs — first guide
 
 Two run modes, each bot belongs in exactly one. LIVE CHART (real time, on
