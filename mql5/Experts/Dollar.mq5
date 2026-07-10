@@ -59,12 +59,14 @@ input double      InpMinSlPips      = 8.0;
 input double      InpMaxSlPips      = 30.0;
 input double      InpMaxRangePips   = 40.0;
 input int         InpMaxSpreadPts   = 12;
-//--- demo-HF mode ---
+//--- demo-HF mode (industry-grade throughput pass, 2026-07-10) ---
 input double      InpHFTakeProfit   = 10.0;
 input double      InpHFStopLoss     = 60.0;
-input int         InpHFEverySeconds = 60;
-input int         InpHFMaxOpen      = 5;
+input int         InpHFCadenceMs    = 1000;  // min ms between entries (>=100)
+input int         InpHFMaxOpen      = 50;    // concurrent positions (1..200)
 input double      InpHFLots         = 1.0;
+input bool        InpHFAsync        = true;  // async order submission (fire, ack via events)
+input double      InpMinFreeMarginPct = 20.0; // stand down below this free-margin % of equity
 //--- common ---
 input long        InpMagic          = 20260900;
 input string      InpParityLog      = "parity_dollar.csv";
@@ -78,6 +80,19 @@ datetime    g_day = 0;
 bool        g_traded_today = false;
 datetime    g_last_bar = 0;
 int         g_hf_dir = 1;
+
+// --- hot-path caches (set once at init: no per-tick SymbolInfo calls) ---
+double      g_stops_level_px = 0.0;  // broker min stop distance, price units
+// --- event-sourced position counter (O(1) hot path) + reconciliation ----
+int         g_open_count = 0;
+datetime    g_last_reconcile = 0;
+// --- cadence + latency instrumentation ---------------------------------
+ulong       g_next_entry_us = 0;
+double      g_submit_us_ema = 0.0;   // EMA of order-submission latency
+long        g_sent = 0, g_acked = 0, g_rejected = 0;
+// --- buffered journal: one persistent handle, flushed on heartbeat ------
+int         g_journal_fh = INVALID_HANDLE;
+uint        g_last_comment_ms = 0;
 
 string ParityFile() { return (MQLInfoInteger(MQL_TESTER) ? "tester_" : "live_") + InpParityLog; }
 datetime UTCDay(const datetime t) { return (datetime)(t - (t % 86400)); }
@@ -139,12 +154,20 @@ int OnInit()
       return(INIT_FAILED);
 
    g_day = UTCDay(TimeGMT());
-   if(HasOurPosition())
+   g_open_count = OurOpenScan();       // reconcile once, then event-sourced
+   if(g_open_count > 0)
       g_traded_today = true;
+   g_stops_level_px = (double)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * _Point;
    ParityHeader();
+   g_journal_fh = FileOpen(ParityFile(), FILE_READ | FILE_WRITE | FILE_CSV | FILE_COMMON, ',');
+   if(g_journal_fh != INVALID_HANDLE)
+      FileSeek(g_journal_fh, 0, SEEK_END);
 
    if(InpMode == MODE_DEMO_HF)
-      EventSetTimer(MathMax(InpHFEverySeconds, 5));
+     {
+      trade.SetAsyncMode(InpHFAsync);  // fire-and-forget; acks via OnTradeTransaction
+      EventSetTimer(1);                // 1s timer = reconciliation + heartbeat only;
+     }                                 // entries are TICK-driven with a ms cadence floor
    else
       EventSetTimer(60);
 
@@ -159,13 +182,27 @@ int OnInit()
    return(INIT_SUCCEEDED);
   }
 
-void OnDeinit(const int reason) { EventKillTimer(); }
+void OnDeinit(const int reason)
+  {
+   EventKillTimer();
+   if(g_journal_fh != INVALID_HANDLE) { FileClose(g_journal_fh); g_journal_fh = INVALID_HANDLE; }
+   if(InpMode == MODE_DEMO_HF)
+      PrintFormat("Dollar HF shutdown: sent=%d acked=%d rejected=%d "
+                  "submit-latency EMA %.0f us", g_sent, g_acked, g_rejected, g_submit_us_ema);
+  }
 
 //+------------------------------------------------------------------+
 void OnTick()
   {
    if(risk.OnTickUpdate())          // breach: flatten ours, halt forever
+     {
       CloseOurPositions();
+      return;
+     }
+   // HF entries ride the TICK stream (lowest latency MQL5 offers an EA),
+   // gated by a millisecond cadence floor — not the 1s timer quantum
+   if(InpMode == MODE_DEMO_HF && !risk.Halted())
+      TryHFEntry();
   }
 
 //+------------------------------------------------------------------+
@@ -181,9 +218,31 @@ void OnTimer()
      {
       case MODE_WATCH:    return;                 // telemetry only
       case MODE_SESSION:  ManageSession();  break;
-      case MODE_DEMO_HF:  ManageDemoHF();   break;
+      case MODE_DEMO_HF:  HFHousekeeping(); break; // entries live on OnTick
       case MODE_SIGNAL:   ManageSignal();   break;
      }
+  }
+
+//+------------------------------------------------------------------+
+//| HF housekeeping (1s timer): reconcile the event-sourced counter,  |
+//| flush the journal, refresh the on-chart truth banner.             |
+//+------------------------------------------------------------------+
+void HFHousekeeping()
+  {
+   const datetime now = TimeCurrent();
+   if(now - g_last_reconcile >= 5)      // self-healing counter, every 5s
+     {
+      g_open_count = OurOpenScan();
+      g_last_reconcile = now;
+     }
+   if(g_journal_fh != INVALID_HANDLE)
+      FileFlush(g_journal_fh);
+   Comment(StringFormat(
+      "Dollar HF — GEOMETRY DEMO, NOT AN EDGE\n"
+      "open %d/%d | sent %d acked %d rejected %d | submit EMA %.0f us\n"
+      "win rate is the dial; expectancy <= 0 by measurement",
+      g_open_count, (int)MathMax(MathMin(InpHFMaxOpen, 200), 1),
+      g_sent, g_acked, g_rejected, g_submit_us_ema));
   }
 
 //+------------------------------------------------------------------+
@@ -236,18 +295,38 @@ void ManageSession()
 //+------------------------------------------------------------------+
 //| MODE_DEMO_HF — high-cadence geometry demo. Negative expectancy.  |
 //+------------------------------------------------------------------+
-void ManageDemoHF()
+void TryHFEntry()
   {
    // fixed InpHFLots BY DESIGN: this is a geometry demonstration, not a
    // risk-sized strategy — constant size is what makes the win-rate dial
    // legible. Demo-only guard (OnInit) is why bypassing the throttle is safe.
-   if(OurOpenCount() >= (int)MathMax(MathMin(InpHFMaxOpen, 20), 1)) return;
+   const ulong now_us = GetMicrosecondCount();
+   if(now_us < g_next_entry_us) return;                 // cadence floor
+   if(g_open_count >= (int)MathMax(MathMin(InpHFMaxOpen, 200), 1)) return;
+
+   // margin guard: professional books stand down before the broker makes them
+   const double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(equity <= 0.0 ||
+      AccountInfoDouble(ACCOUNT_MARGIN_FREE) < equity * InpMinFreeMarginPct / 100.0)
+      return;
+
    const double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    const double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    if(ask <= 0 || bid <= 0) return;
    const double tp = InpHFTakeProfit * g_pip, sl = InpHFStopLoss * g_pip;
-   if(g_hf_dir > 0) trade.Buy(InpHFLots, _Symbol, 0.0, bid - sl, ask + tp, "Dollar HF");
-   else             trade.Sell(InpHFLots, _Symbol, 0.0, ask + sl, bid - tp, "Dollar HF");
+   if(tp < g_stops_level_px || sl < g_stops_level_px)
+      return;   // broker min-stop distance: refuse rather than silently
+                // widen (widening would falsify the win-rate geometry)
+
+   g_next_entry_us = now_us + (ulong)MathMax(InpHFCadenceMs, 100) * 1000;
+   const ulong t0 = GetMicrosecondCount();
+   bool ok;
+   if(g_hf_dir > 0) ok = trade.Buy(InpHFLots, _Symbol, 0.0, bid - sl, ask + tp, "Dollar HF");
+   else             ok = trade.Sell(InpHFLots, _Symbol, 0.0, ask + sl, bid - tp, "Dollar HF");
+   const double dt_us = (double)(GetMicrosecondCount() - t0);
+   g_submit_us_ema = (g_submit_us_ema == 0.0) ? dt_us : 0.9 * g_submit_us_ema + 0.1 * dt_us;
+   g_sent++;
+   if(!ok) g_rejected++;
    g_hf_dir = -g_hf_dir;
   }
 
@@ -283,7 +362,9 @@ double SizedLots(const double sl_pips)
    return risk.AllowedLots(sl_pips, AccountInfoDouble(ACCOUNT_EQUITY), tv * (g_pip / ts));
   }
 
-int OurOpenCount()
+// full scan: init + periodic reconciliation only. The hot path reads the
+// event-sourced g_open_count (O(1)) maintained in OnTradeTransaction.
+int OurOpenScan()
   {
    int n = 0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -294,7 +375,12 @@ int OurOpenCount()
    return(n);
   }
 
-bool HasOurPosition() { return OurOpenCount() > 0; }
+int OurOpenCount()
+  {
+   // non-HF modes hold <=1 position: the scan is cheap and always exact.
+   // HF mode trusts the event counter between 5s reconciliations.
+   return (InpMode == MODE_DEMO_HF) ? g_open_count : OurOpenScan();
+  }
 
 void CloseOurPositions()
   {
@@ -334,14 +420,19 @@ void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest 
   {
    if(trans.type != TRADE_TRANSACTION_DEAL_ADD || !HistoryDealSelect(trans.deal)) return;
    if(HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagic) return;
-   const int fh = FileOpen(ParityFile(), FILE_READ | FILE_WRITE | FILE_CSV | FILE_COMMON, ',');
-   if(fh == INVALID_HANDLE) return;
-   FileSeek(fh, 0, SEEK_END);
-   FileWrite(fh, TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS), ModeName(InpMode),
+
+   // event-sourced O(1) position counter (reconciled every 5s in housekeeping)
+   const ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+   if(entry == DEAL_ENTRY_IN)       { g_open_count++; g_acked++; }
+   else if(entry == DEAL_ENTRY_OUT) { g_open_count = (int)MathMax(g_open_count - 1, 0); }
+
+   // buffered journal: persistent handle, flushed on the 1s housekeeping tick
+   if(g_journal_fh == INVALID_HANDLE) return;
+   FileWrite(g_journal_fh, TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS),
+             ModeName(InpMode),
              HistoryDealGetString(trans.deal, DEAL_SYMBOL),
              (string)HistoryDealGetInteger(trans.deal, DEAL_TYPE),
              DoubleToString(HistoryDealGetDouble(trans.deal, DEAL_VOLUME), 2),
              DoubleToString(HistoryDealGetDouble(trans.deal, DEAL_PRICE), _Digits),
              DoubleToString(HistoryDealGetDouble(trans.deal, DEAL_PROFIT), 2));
-   FileClose(fh);
   }

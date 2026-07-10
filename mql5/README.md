@@ -45,6 +45,15 @@ parity CSV, push alerts), four modes via `InpMode`:
   sizing. The rehearsal strategy (refuted on 5.5y — ops-honest, not an edge).
 - `MODE_DEMO_HF`: high-cadence geometry demo (~86% win rate, NEGATIVE
   expectancy printed at init). Demo/tester only, hard-guarded.
+  Industry-grade throughput (2026-07-10): tick-driven entries with a
+  millisecond cadence floor (InpHFCadenceMs, >=100ms), async order
+  submission (acks via transaction events), up to 200 concurrent positions
+  behind a free-margin stand-down guard, O(1) event-sourced position
+  accounting reconciled every 5s, broker stops-level compliance (refuses
+  rather than silently widening the geometry), persistent buffered journal
+  handle flushed each second, and live submission-latency EMA + sent/acked/
+  rejected counters on the chart banner. Throughput engineering moves the
+  plumbing, never the sign: the mode remains a priced demonstration.
 - `MODE_SIGNAL`: the throne — routes a VALIDATED signal through full risk +
   execution. Ships a NULL provider; trades nothing until a family passes the
   gauntlet + parity gate. The only mode meant to make money on a funded
