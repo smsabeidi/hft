@@ -17,6 +17,12 @@ import pandas as pd
 
 COST_RT_BPS = 2.5
 GRID = {"range_min": [15, 30], "target_r": [0.0, 4.0]}  # 0.0 = no target
+# ROUND 2 (pre-registered direction, reports/orb_research.md): condition on
+# the opening-range volatility regime — trade only when the day's opening
+# range is large relative to its trailing history, where Gao et al. intraday
+# momentum concentrates. vol_pct = 0.0 means unconditioned (round-1 behavior).
+GRID_R2 = {"range_min": [15, 30], "target_r": [0.0, 4.0], "vol_pct": [0.5, 0.65]}
+VOL_LOOKBACK = 20  # trailing days for the opening-range volatility percentile
 TRAIN_N, TEST_N, ROLL_N = 500, 120, 120
 
 OPEN_MIN = 9 * 60 + 30    # 09:30 NY
@@ -28,6 +34,8 @@ DAY_END = 15 * 60 + 55    # 15:55 NY
 class ORBParams:
     range_min: int = 30
     target_r: float = 0.0
+    vol_pct: float = 0.0  # 0.0 = unconditioned; else require the day's opening
+                          # range >= this trailing-VOL_LOOKBACK-day quantile
 
 
 @dataclass
@@ -49,6 +57,7 @@ def prep(m1: pd.DataFrame) -> pd.DataFrame:
 
 def run_orb(m1: pd.DataFrame, p: ORBParams) -> list[ORBTrade]:
     trades: list[ORBTrade] = []
+    recent_ranges: list[float] = []   # trailing opening-range sizes (bps), causal
     for _, day_rows in m1.groupby("day", sort=True):
         d = day_rows[day_rows["minute"] >= OPEN_MIN]
         rng = d[d["minute"] < OPEN_MIN + p.range_min]
@@ -57,6 +66,22 @@ def run_orb(m1: pd.DataFrame, p: ORBParams) -> list[ORBTrade]:
         hi, lo = float(rng["high"].max()), float(rng["low"].min())
         if hi <= lo:
             continue
+
+        # volatility-regime gate (round 2): the day's opening range vs its own
+        # trailing history. Percentile uses ONLY prior days (causal); today's
+        # range is appended AFTER the decision.
+        or_bps = (hi - lo) / ((hi + lo) / 2) * 1e4
+        if p.vol_pct > 0.0:
+            if len(recent_ranges) < VOL_LOOKBACK:
+                recent_ranges.append(or_bps)
+                continue  # warmup: no trade until a trailing window exists
+            threshold = float(np.quantile(recent_ranges[-VOL_LOOKBACK:], p.vol_pct))
+            hot = or_bps >= threshold
+            recent_ranges.append(or_bps)
+            if not hot:
+                continue
+        else:
+            recent_ranges.append(or_bps)
 
         window = d[(d["minute"] >= OPEN_MIN + p.range_min) & (d["minute"] < DAY_END)]
         if window.empty:
@@ -121,7 +146,9 @@ class ORBWindow:
     test_trades: int
 
 
-def walk_forward_orb(m1: pd.DataFrame, symbol: str) -> tuple[list[ORBWindow], list[ORBTrade]]:
+def walk_forward_orb(m1: pd.DataFrame, symbol: str, grid: dict | None = None
+                     ) -> tuple[list[ORBWindow], list[ORBTrade]]:
+    grid = grid or GRID
     m1 = prep(m1.sort_values("time", ignore_index=True))
     days = sorted(m1["day"].unique())
     windows: list[ORBWindow] = []
@@ -134,12 +161,12 @@ def walk_forward_orb(m1: pd.DataFrame, symbol: str) -> tuple[list[ORBWindow], li
         test = m1[m1["day"].isin(test_days)]
 
         best, best_net = None, float("-inf")
-        for combo in product(*GRID.values()):
-            p = ORBParams(*combo)
+        for combo in product(*grid.values()):
+            p = ORBParams(**dict(zip(grid, combo)))
             net = sum(t.net_bps for t in run_orb(train, p))
             if net > best_net:
                 best_net, best = net, combo
-        p = ORBParams(*best)
+        p = ORBParams(**dict(zip(grid, best)))
         trades = run_orb(test, p)
         windows.append(
             ORBWindow(symbol, days[start + TRAIN_N], dict(zip(GRID, best)),

@@ -15,3 +15,4 @@
 2026-07-07T17:26:10.211281+00:00 family=fvg_retest_r2_gold_btc range=2021-01..2026-06 scheme=500/120xM5 costs=XAU2bp/BTC10bpRT mean_trade_net_bps=-3.09 t=-33.21 trades=29500 win_rate=0.40 stability=0.25 result=FAIL-family-dead
 2026-07-08T00:43:57.262342+00:00 family=fx_carry_xs_r2 range=2021-01..2026-06 scheme=500/120x1d-weekly costs=0.85bp_side+markup1.0 mean_week_net_bps=5.0 t=0.54 weeks=170 stability=0.71 result=FAIL-family-dead
 2026-07-09T06:02:30.103708+00:00 family=us_open_orb_indices range=2021-01..2026-06 scheme=500/120xNYopen costs=2.5bpRT mean_trade_net_bps=-0.64 t=-0.43 trades=1823 win_rate=0.33 stability=0.30 result=FAIL
+2026-07-10T20:41:58.306925+00:00 family=us_open_orb_vol_conditioned range=2021-01..2026-06 scheme=500/120xNYopen costs=2.5bpRT mean_trade_net_bps=-0.44 t=-0.13 trades=651 win_rate=0.39 stability=0.55 result=FAIL-family-dead
