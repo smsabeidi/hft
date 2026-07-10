@@ -12,8 +12,13 @@
 //| Entries are SIGNAL-FREE by construction (strict alternation on a  |
 //| fixed clock) so the win rate shown is pure geometry, not skill.   |
 //|                                                                   |
-//| TESTER ONLY: OnInit hard-fails outside the Strategy Tester. This  |
-//| instrument must never touch a demo or live account.               |
+//| SCOPE (2026-07-09, founder-directed demo unlock): Strategy Tester |
+//| and true DEMO accounts only. Hard-refused: any real/live account   |
+//| (unconditionally) and any firm server where EAs are banned          |
+//| (EABannedHere — the FundedNext trial registers as demo but bans    |
+//| EAs). On demo it doubles as a LOAD TEST of the execution/journal/  |
+//| alert stack at high order rates. Expected drift is printed on the |
+//| chart while it runs; the win rate is geometry, not edge.           |
 //+------------------------------------------------------------------+
 #property copyright "HFT harness"
 #property version   "1.00"
@@ -21,6 +26,7 @@
 #property strict
 
 #include <Trade\Trade.mqh>
+#include <FirmConfig.mqh>   // EABannedHere(): blocks EA-banned firm servers
 
 // defaults set to the founder's 85% goal (2026-07-07): sl/(tp+sl) = 85.7%,
 // measured 86.3% on 5,089 real trades — at -0.65 pips/trade after costs.
@@ -28,7 +34,8 @@
 // reports/win_rate_illusion.md. Expectancy stays negative at every setting.
 input double InpTakeProfitPips = 10.0;
 input double InpStopLossPips   = 60.0;
-input int    InpEveryMinutes   = 30;    // entry cadence while flat
+input int    InpEverySeconds   = 60;    // entry cadence (clamped >= 5s)
+input int    InpMaxOpen        = 5;     // concurrent positions (clamped 1..20)
 input double InpLots           = 1.0;   // 1 lot: EURUSD $10/pip; size scales
                                         // wins AND stops linearly, never the sign
 input long   InpMagic          = 20260780;
@@ -38,45 +45,66 @@ double g_pip;
 int    g_dir = 1;               // strict alternation: +1, -1, +1, ...
 int    g_wins = 0, g_losses = 0;
 double g_net = 0.0;
-datetime g_last_entry_minute = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   if(!MQLInfoInteger(MQL_TESTER))
+   const bool is_tester = (bool)MQLInfoInteger(MQL_TESTER);
+   const bool is_demo =
+      (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE)
+      == ACCOUNT_TRADE_MODE_DEMO;
+   if(!is_tester)
      {
-      Alert("WinRate80 is a geometry DEMONSTRATION for the Strategy Tester ",
-            "only. It has negative expectancy by design measurement. ",
-            "It will not run on demo or live. Ever.");
-      return(INIT_FAILED);
+      if(!is_demo)
+        {
+         Alert("WinRate80 runs in the Strategy Tester and on true DEMO ",
+               "accounts only. Real/live accounts: never — its expectancy ",
+               "is negative by measurement.");
+         return(INIT_FAILED);
+        }
+      if(EABannedHere())   // FundedNext trial = 'demo' mode but EAs banned
+         return(INIT_FAILED);
      }
    g_pip = (_Digits == 5 || _Digits == 3) ? 10.0 * _Point : _Point;
    trade.SetExpertMagicNumber(InpMagic);
-   PrintFormat("WinRate80 up: TP %.0fp / SL %.0fp -> theoretical win rate %.1f%%. "
-               "Expectancy after costs is NEGATIVE (measured -1.30 pips/trade on 5.5y). "
-               "You are watching a dial, not an edge.",
-               InpTakeProfitPips, InpStopLossPips,
-               100.0 * InpStopLossPips / (InpTakeProfitPips + InpStopLossPips));
+   EventSetTimer(MathMax(InpEverySeconds, 5));
+   PrintFormat("WinRate80 up (%s): TP %.0fp / SL %.0fp -> theoretical win rate %.1f%%, "
+               "cadence %ds, max %d concurrent. Expectancy after costs is NEGATIVE "
+               "(measured -0.65 pips/trade at this geometry). Dial, not edge.",
+               is_tester ? "tester" : "DEMO", InpTakeProfitPips, InpStopLossPips,
+               100.0 * InpStopLossPips / (InpTakeProfitPips + InpStopLossPips),
+               (int)MathMax(InpEverySeconds, 5),
+               (int)MathMax(MathMin(InpMaxOpen, 20), 1));
    return(INIT_SUCCEEDED);
   }
-//+------------------------------------------------------------------+
-void OnTick()
+
+void OnDeinit(const int reason) { EventKillTimer(); }
+
+int OurOpenPositions()
   {
-   if(PositionsTotal() > 0)
+   int n = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      const ulong ticket = PositionGetTicket(i);
+      if(ticket > 0 && PositionGetInteger(POSITION_MAGIC) == InpMagic)
+         n++;
+     }
+   return(n);
+  }
+//+------------------------------------------------------------------+
+void OnTimer()
+  {
+   if(OurOpenPositions() >= (int)MathMax(MathMin(InpMaxOpen, 20), 1))
       return;
-   const datetime now = TimeCurrent();
-   const datetime minute = now - (now % 60);
-   MqlDateTime dt;
-   TimeToStruct(now, dt);
-   if(dt.min % InpEveryMinutes != 0 || minute == g_last_entry_minute)
-      return;
-   g_last_entry_minute = minute;
 
    const double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    const double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   if(ask <= 0.0 || bid <= 0.0)
+      return;
    const double tp_d = InpTakeProfitPips * g_pip;
    const double sl_d = InpStopLossPips * g_pip;
 
+   // strict alternation: the win rate shown is geometry, never direction skill
    if(g_dir > 0)
       trade.Buy(InpLots, _Symbol, 0.0, bid - sl_d, ask + tp_d, "WR80 demo long");
    else
