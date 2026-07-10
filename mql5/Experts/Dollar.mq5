@@ -19,7 +19,11 @@
 //|   MODE_DEMO_HF - high-cadence geometry demo (the WinRate80 role):  |
 //|                  seconds cadence, multi-position, ~86% win rate,   |
 //|                  NEGATIVE expectancy printed live. Demo/tester      |
-//|                  only, by hard guard.                             |
+//|                  only, by hard guard. FIXED lot size by design     |
+//|                  (the geometry demo shows the dial at constant      |
+//|                  size) — the equity throttle applies to the         |
+//|                  risk-sized modes (SESSION, SIGNAL), not this one.  |
+//|                  Stops ARE server-side on every order here too.     |
 //|   MODE_SIGNAL  - the throne: routes a VALIDATED signal from        |
 //|                  GetSignal() through full risk + execution. Ships  |
 //|                  a NULL provider — trades nothing until a family   |
@@ -82,6 +86,11 @@ datetime UTCDay(const datetime t) { return (datetime)(t - (t % 86400)); }
 //| SIGNAL SLOT — the throne. A validated family (gauntlet + parity   |
 //| PASS) is the ONLY thing that may be wired in here. Ships NULL.    |
 //+------------------------------------------------------------------+
+// Two-step arming: filling GetSignal() is not enough — MODE_SIGNAL refuses
+// to trade until DOLLAR_SIGNAL_VALIDATED is ALSO flipped true, a deliberate
+// second edit that no accidental/untested wiring of GetSignal can satisfy.
+#define DOLLAR_SIGNAL_VALIDATED false
+
 struct DollarSignal { int dir; double sl_pips; double tp_pips; };
 bool GetSignal(DollarSignal &s)
   {
@@ -120,8 +129,9 @@ int OnInit()
       return(INIT_FAILED);
      }
 
-   if(InpServerUTCOffset())  // sets g_srv_off_sec; kept trivial here
-      {}
+   ComputeServerOffset();   // sets g_srv_off_sec (server time minus UTC)
+   PrintFormat("Dollar server-UTC offset: %+d min (auto) — VERIFY vs broker",
+               g_srv_off_sec / 60);
 
    if(!risk.Init(InpInitialBalance, FIRM_DAILY_LOSS_FRAC, FIRM_TOTAL_DD_FRAC,
                  OWN_RISK_PER_TRADE, OWN_SAFETY_FACTOR, FIRM_MAX_LOTS,
@@ -143,8 +153,9 @@ int OnInit()
                tester ? "tester" : (demo ? "DEMO" : "LIVE"),
                risk.DailyLossFloor(), risk.TotalDDFloor());
    if(InpMode == MODE_SIGNAL)
-      Print("Dollar MODE_SIGNAL: signal slot is NULL — no validated MT5 family "
-            "yet. This EA will not trade until GetSignal() is filled by a PASS.");
+      Print("Dollar MODE_SIGNAL: DISARMED (slot NULL and DOLLAR_SIGNAL_VALIDATED=",
+            DOLLAR_SIGNAL_VALIDATED ? "true" : "false",
+            "). Will not trade until a family PASSES and the sentinel is flipped.");
    return(INIT_SUCCEEDED);
   }
 
@@ -184,8 +195,12 @@ void ManageSession()
    if(bar == g_last_bar) return;
    g_last_bar = bar;
 
-   MqlDateTime dt; TimeToStruct(TimeGMT(), dt);
-   const datetime today = UTCDay(TimeGMT());
+   // derive UTC from the SERVER-stamped closed bar + measured offset — robust
+   // in the tester where TimeGMT() is unreliable; mirrors SessionBreakout so
+   // the parity gate holds
+   const datetime bar_utc = iTime(_Symbol, PERIOD_M1, 1) - g_srv_off_sec;
+   MqlDateTime dt; TimeToStruct(bar_utc, dt);
+   const datetime today = UTCDay(bar_utc);
    if(today != g_day) { g_day = today; g_asian_hi = 0; g_asian_lo = 0; g_traded_today = false; }
 
    // accumulate the Asian range up to InpAsianEndHour
@@ -223,6 +238,9 @@ void ManageSession()
 //+------------------------------------------------------------------+
 void ManageDemoHF()
   {
+   // fixed InpHFLots BY DESIGN: this is a geometry demonstration, not a
+   // risk-sized strategy — constant size is what makes the win-rate dial
+   // legible. Demo-only guard (OnInit) is why bypassing the throttle is safe.
    if(OurOpenCount() >= (int)MathMax(MathMin(InpHFMaxOpen, 20), 1)) return;
    const double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    const double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
@@ -238,6 +256,7 @@ void ManageDemoHF()
 //+------------------------------------------------------------------+
 void ManageSignal()
   {
+   if(!DOLLAR_SIGNAL_VALIDATED) return;   // throne disarmed: never trades
    const datetime bar = iTime(_Symbol, PERIOD_CURRENT, 0);
    if(bar == g_last_bar) return;
    g_last_bar = bar;
@@ -279,19 +298,21 @@ bool HasOurPosition() { return OurOpenCount() > 0; }
 
 void CloseOurPositions()
   {
+   // re-validate each ticket by select before closing (async close can shift
+   // PositionsTotal mid-loop; mirrors SessionBreakout's close-by-ticket rule)
    for(int i = PositionsTotal() - 1; i >= 0; i--)
      {
       const ulong t = PositionGetTicket(i);
-      if(t > 0 && PositionGetInteger(POSITION_MAGIC) == InpMagic)
+      if(t > 0 && PositionSelectByTicket(t) &&
+         PositionGetInteger(POSITION_MAGIC) == InpMagic)
          trade.PositionClose(t);
      }
   }
 
-bool InpServerUTCOffset()
+void ComputeServerOffset()
   {
    const long raw = (long)TimeCurrent() - (long)TimeGMT();
-   g_srv_off_sec = (int)(MathRound(raw / 1800.0) * 1800);
-   return(true);
+   g_srv_off_sec = (int)(MathRound(raw / 1800.0) * 1800);   // nearest 30 min
   }
 
 void Heartbeat() { GlobalVariableSet("HB_DOLLAR_" + (string)InpMagic, (double)TimeCurrent()); }
