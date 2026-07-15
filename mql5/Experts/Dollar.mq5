@@ -51,6 +51,11 @@ input EDollarMode InpMode           = MODE_WATCH;      // start safe: telemetry 
 //--- risk (inherits the pinned FirmConfig; overridable per attach) ---
 input double      InpInitialBalance = FIRM_ACCOUNT_TIER_USD;
 input bool        InpRulesVerified  = FIRM_RULES_VERIFIED;
+//--- SOFT daily circuit breaker (universal loss cap; works on any account,
+//--- any mode; distinct from the permanent breach-halt — this one RESETS
+//--- each day). Flattens + stands down when the day's loss hits the ceiling.
+input double      InpDailyStopPct   = 3.0;   // % of day-start equity; 0 = off
+input double      InpMaxTotalRiskPct = 5.0;  // cap aggregate open risk (SL x size) as % equity; 0 = off
 //--- session mode (UTC) ---
 input int         InpAsianEndHour   = 7;
 input int         InpLondonEndHour  = 12;
@@ -93,6 +98,10 @@ long        g_sent = 0, g_acked = 0, g_rejected = 0;
 // --- buffered journal: one persistent handle, flushed on heartbeat ------
 int         g_journal_fh = INVALID_HANDLE;
 uint        g_last_comment_ms = 0;
+// --- soft daily circuit breaker (resets each server day) ----------------
+datetime    g_breaker_day = 0;
+double      g_day_start_equity = 0.0;
+bool        g_stood_down_today = false;
 
 string ParityFile() { return (MQLInfoInteger(MQL_TESTER) ? "tester_" : "live_") + InpParityLog; }
 datetime UTCDay(const datetime t) { return (datetime)(t - (t % 86400)); }
@@ -194,15 +203,46 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   if(risk.OnTickUpdate())          // breach: flatten ours, halt forever
+   if(risk.OnTickUpdate())          // permanent breach: flatten ours, halt forever
      {
       CloseOurPositions();
       return;
      }
+   if(DailyBreakerTripped())        // soft daily cap: flatten + stand down (resets tomorrow)
+      return;
    // HF entries ride the TICK stream (lowest latency MQL5 offers an EA),
    // gated by a millisecond cadence floor — not the 1s timer quantum
    if(InpMode == MODE_DEMO_HF && !risk.Halted())
       TryHFEntry();
+  }
+
+//+------------------------------------------------------------------+
+//| Soft daily circuit breaker — the universal loss cap. Resets each  |
+//| server day (unlike the permanent breach-halt). Returns true when  |
+//| the day is stood down (caller must place no new entries).         |
+//+------------------------------------------------------------------+
+bool DailyBreakerTripped()
+  {
+   const datetime today = (datetime)(TimeCurrent() - (TimeCurrent() % 86400));
+   if(today != g_breaker_day)       // new day: re-anchor, re-arm
+     {
+      g_breaker_day = today;
+      g_day_start_equity = AccountInfoDouble(ACCOUNT_EQUITY);
+      g_stood_down_today = false;
+     }
+   if(g_stood_down_today) return(true);
+   if(InpDailyStopPct <= 0.0) return(false);
+   const double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(g_day_start_equity > 0.0 &&
+      eq <= g_day_start_equity * (1.0 - InpDailyStopPct / 100.0))
+     {
+      CloseOurPositions();          // includes floating losers — this is the point
+      g_stood_down_today = true;
+      Notify(StringFormat("DAILY STOP -%.1f%% hit: flattened, standing down to next day",
+                          InpDailyStopPct));
+      return(true);
+     }
+   return(false);
   }
 
 //+------------------------------------------------------------------+
@@ -211,6 +251,14 @@ void OnTimer()
    if(risk.Halted())
       return;
    Heartbeat();
+
+   // HF housekeeping (reconcile/flush/banner) runs regardless of the breaker;
+   // the daily stop only gates NEW entries, which for HF live on OnTick.
+   if(InpMode == MODE_DEMO_HF)
+     { HFHousekeeping(); return; }
+
+   if(DailyBreakerTripped())        // soft daily cap gates timer-driven entries too
+      return;
    if(!(bool)TerminalInfoInteger(TERMINAL_CONNECTED))
       return;                       // no new entries while disconnected
 
@@ -218,8 +266,8 @@ void OnTimer()
      {
       case MODE_WATCH:    return;                 // telemetry only
       case MODE_SESSION:  ManageSession();  break;
-      case MODE_DEMO_HF:  HFHousekeeping(); break; // entries live on OnTick
       case MODE_SIGNAL:   ManageSignal();   break;
+      default: break;
      }
   }
 
@@ -309,6 +357,20 @@ void TryHFEntry()
    if(equity <= 0.0 ||
       AccountInfoDouble(ACCOUNT_MARGIN_FREE) < equity * InpMinFreeMarginPct / 100.0)
       return;
+
+   // aggregate open-risk cap: N concurrent same-symbol positions are ONE
+   // correlated bet, not N diversified ones — this bounds the total, which
+   // is the tail that actually kills accounts. Refuse the entry that would
+   // breach the ceiling. (Cap on the loss-side risk: (N+1) x SL x size.)
+   if(InpMaxTotalRiskPct > 0.0)
+     {
+      const double tvpp = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE) *
+                          (g_pip / SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE));
+      const double per_pos_risk = InpHFStopLoss * tvpp * InpHFLots;
+      if((g_open_count + 1) * per_pos_risk >
+         AccountInfoDouble(ACCOUNT_EQUITY) * InpMaxTotalRiskPct / 100.0)
+         return;   // adding this position would exceed the aggregate risk cap
+     }
 
    const double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    const double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);

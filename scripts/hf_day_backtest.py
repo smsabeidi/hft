@@ -32,6 +32,13 @@ class HFConfig:
     cadence_ms: int = 1000
     max_open: int = 50
     label: str = ""
+    # daily circuit breaker (mirrors Dollar's InpDailyStopPct): flatten and
+    # stand down for the day when equity (realized + floating) drops this %
+    # of day-start equity. 0 = disabled.
+    daily_stop_pct: float = 0.0
+    start_equity: float = 100_000.0
+    pip_value_per_lot: float = 10.0
+    lots: float = 0.5
 
 
 @dataclass
@@ -81,6 +88,8 @@ def simulate_hf_day(bars: pd.DataFrame, cfg: HFConfig) -> HFDayResult:
     net_pips = 0.0
     peak_concurrent = 0
     concurrent_area = 0  # sum of open-count per bar, for time-avg
+    stopped_out_day = False   # daily breaker tripped
+    dollar_per_pip = cfg.pip_value_per_lot * cfg.lots
 
     for i in range(n):
         # 1) resolve open positions on THIS bar (stop priority)
@@ -98,8 +107,24 @@ def simulate_hf_day(bars: pd.DataFrame, cfg: HFConfig) -> HFDayResult:
                 still_open.append((epx, d, tpx, spx))
         open_pos = still_open
 
+        # 1b) DAILY BREAKER: realized + floating equity vs the day-stop floor
+        if cfg.daily_stop_pct > 0.0 and not stopped_out_day:
+            floating_pips = sum(((bars["close"].iloc[i] - epx) / PIP) * d for (epx, d, _, _) in open_pos)
+            equity = cfg.start_equity + (net_pips + floating_pips) * dollar_per_pip
+            if equity <= cfg.start_equity * (1.0 - cfg.daily_stop_pct / 100.0):
+                # flatten every open position at this bar's close, stand down
+                for (epx, d, _, _) in open_pos:
+                    mark = (bars["close"].iloc[i] - epx) / PIP * d
+                    net_pips += mark - COST_RT_PIPS
+                    if mark >= 0:
+                        wins += 1
+                    else:
+                        losses += 1
+                open_pos = []
+                stopped_out_day = True
+
         # 2) attempt new entry (cadence floor + cap), alternating direction
-        if t_ms[i] >= next_entry_ms and len(open_pos) < cfg.max_open:
+        if not stopped_out_day and t_ms[i] >= next_entry_ms and len(open_pos) < cfg.max_open:
             entry = o[i]
             if direction > 0:
                 open_pos.append((entry, 1, entry + tp, entry - sl))
